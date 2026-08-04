@@ -1,244 +1,226 @@
-import { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
-import { customers as initialCustomers } from '../data/customers';
-import { transactions as initialTransactions } from '../data/transactions';
-import { notifications as initialNotifications } from '../data/notifications';
-import { invoices as initialInvoices } from '../data/invoices';
+import {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+} from 'react';
+import { useAuth } from './AuthContext';
 import { businessProfile, defaultSettings } from '../data/settings';
-import { generateId } from '../utils/helpers';
-import { nextInvoiceNumber, calcInvoiceTotals } from '../utils/invoiceUtils';
-import { loadPersistedData, savePersistedData } from '../utils/storage';
+import * as customersApi from '../api/customers';
+import * as transactionsApi from '../api/transactions';
+import * as invoicesApi from '../api/invoices';
+import * as notificationsApi from '../api/notifications';
+import * as authApi from '../api/auth';
+import * as coreApi from '../api/core';
 
 const AppContext = createContext(null);
 
-function getInitialState() {
-  const saved = loadPersistedData();
-  return {
-    customers: saved?.customers || initialCustomers,
-    transactions: saved?.transactions || initialTransactions,
-    notifications: saved?.notifications || initialNotifications,
-    invoices: saved?.invoices || initialInvoices,
-    settings: saved?.settings ? { ...defaultSettings, ...saved.settings } : defaultSettings,
-    profile: saved?.profile ? { ...businessProfile, ...saved.profile } : businessProfile,
-    activityLog: saved?.activityLog || [
-      { id: 'act_1', type: 'system', message: 'Welcome to Daily Ledger Management System', at: new Date().toISOString() },
-    ],
-  };
-}
-
 export function AppProvider({ children }) {
-  const initial = useMemo(() => getInitialState(), []);
-  const [customers, setCustomers] = useState(initial.customers);
-  const [transactions, setTransactions] = useState(initial.transactions);
-  const [notifications, setNotifications] = useState(initial.notifications);
-  const [invoices, setInvoices] = useState(initial.invoices);
-  const [settings, setSettings] = useState(initial.settings);
-  const [profile, setProfile] = useState(initial.profile);
-  const [activityLog, setActivityLog] = useState(initial.activityLog);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  const [customers, setCustomers] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [settings, setSettingsState] = useState(defaultSettings);
+  const [profile, setProfileState] = useState(businessProfile);
+  const [activityLog, setActivityLog] = useState([]);
+  const [dashboardExtra, setDashboardExtra] = useState(null);
+  const [analyticsData, setAnalyticsData] = useState(null);
+  const [reportsData, setReportsData] = useState(null);
+
+  const [dataLoading, setDataLoading] = useState(false);
+  const [dataError, setDataError] = useState(null);
+  const [dataReady, setDataReady] = useState(false);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
 
+  const clearLocal = useCallback(() => {
+    setCustomers([]);
+    setTransactions([]);
+    setNotifications([]);
+    setInvoices([]);
+    setSettingsState(defaultSettings);
+    setProfileState(businessProfile);
+    setActivityLog([]);
+    setDashboardExtra(null);
+    setAnalyticsData(null);
+    setReportsData(null);
+    setDataReady(false);
+    setDataError(null);
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setDataLoading(true);
+    setDataError(null);
+    try {
+      const [
+        custs,
+        txns,
+        invs,
+        notifs,
+        activity,
+        prof,
+        sett,
+        dash,
+        analytics,
+        reports,
+      ] = await Promise.all([
+        customersApi.listCustomers(),
+        transactionsApi.listTransactions(),
+        invoicesApi.listInvoices(),
+        notificationsApi.listNotifications(),
+        notificationsApi.listActivity(),
+        authApi.getProfile(),
+        authApi.getSettings(),
+        coreApi.getDashboard().catch(() => null),
+        coreApi.getAnalytics(6).catch(() => null),
+        coreApi.getReports().catch(() => null),
+      ]);
+
+      setCustomers(custs);
+      setTransactions(txns);
+      setInvoices(invs);
+      setNotifications(notifs);
+      setActivityLog(activity);
+      setProfileState({ ...businessProfile, ...prof });
+      setSettingsState({ ...defaultSettings, ...sett });
+      setDashboardExtra(dash);
+      setAnalyticsData(analytics);
+      setReportsData(reports);
+      setDataReady(true);
+    } catch (err) {
+      console.error(err);
+      setDataError(err.message || 'Failed to load data');
+    } finally {
+      setDataLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      clearLocal();
+      return;
+    }
+    refreshAll().catch(() => {});
+  }, [isAuthenticated, authLoading, refreshAll, clearLocal]);
+
+  const refreshCustomers = useCallback(async () => {
+    const custs = await customersApi.listCustomers();
+    setCustomers(custs);
+    return custs;
+  }, []);
+
+  const refreshTransactions = useCallback(async () => {
+    const txns = await transactionsApi.listTransactions();
+    setTransactions(txns);
+    return txns;
+  }, []);
+
   const logActivity = useCallback((message, type = 'info') => {
     setActivityLog((prev) => [
-      { id: generateId('act'), type, message, at: new Date().toISOString() },
+      { id: `local_${Date.now()}`, type, message, at: new Date().toISOString() },
       ...prev,
     ].slice(0, 100));
   }, []);
 
-  // Persist to localStorage
-  useEffect(() => {
-    savePersistedData({
-      customers,
-      transactions,
-      notifications,
-      invoices,
-      settings,
-      profile,
-      activityLog: activityLog.slice(0, 50),
-    });
-  }, [customers, transactions, notifications, invoices, settings, profile, activityLog]);
-
-  const addCustomer = useCallback((data) => {
-    const newCustomer = {
-      ...data,
-      id: generateId('cust'),
-      currentBalance: data.currentBalance ?? 0,
-      status: data.status || 'active',
-      photo: null,
-      lastTransaction: null,
-      createdAt: new Date().toISOString().split('T')[0],
-      tags: data.tags || [],
-    };
-    setCustomers((prev) => [newCustomer, ...prev]);
-    logActivity(`Customer added: ${newCustomer.name}`, 'customer');
-    return newCustomer;
+  const addCustomer = useCallback(async (data) => {
+    const created = await customersApi.createCustomer(data);
+    setCustomers((prev) => [created, ...prev]);
+    logActivity(`Customer added: ${created.name}`, 'customer');
+    return created;
   }, [logActivity]);
 
-  const updateCustomer = useCallback((id, data) => {
-    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...data } : c)));
+  const updateCustomer = useCallback(async (id, data) => {
+    const updated = await customersApi.updateCustomer(id, data);
+    setCustomers((prev) => prev.map((c) => (c.id === id || c.pk === updated.pk ? updated : c)));
     logActivity('Customer updated', 'customer');
+    return updated;
   }, [logActivity]);
 
-  const deleteCustomer = useCallback((id) => {
-    setCustomers((prev) => {
-      const c = prev.find((x) => x.id === id);
-      if (c) logActivity(`Customer deleted: ${c.name}`, 'customer');
-      return prev.filter((x) => x.id !== id);
-    });
-  }, [logActivity]);
+  const deleteCustomer = useCallback(async (id) => {
+    const c = customers.find((x) => x.id === id);
+    await customersApi.deleteCustomer(id);
+    setCustomers((prev) => prev.filter((x) => x.id !== id));
+    if (c) logActivity(`Customer deleted: ${c.name}`, 'customer');
+  }, [customers, logActivity]);
 
   const getCustomer = useCallback(
-    (id) => customers.find((c) => c.id === id),
+    (id) => customers.find((c) => c.id === id || String(c.pk) === String(id)),
     [customers]
   );
 
-  const addTransaction = useCallback((data) => {
-    const customer = customers.find((c) => c.id === data.customerId);
-    const newTx = {
-      ...data,
-      id: generateId('txn'),
-      customerName: customer?.name || data.customerName || '',
-      createdAt: new Date().toISOString(),
-    };
-    setTransactions((prev) => [newTx, ...prev]);
-
-    if (customer || data.customerId) {
-      let balanceChange = 0;
-      if (data.type === 'credit') balanceChange = data.amount;
-      if (data.type === 'payment' || data.type === 'return' || data.type === 'discount') {
-        balanceChange = -data.amount;
-      }
-      setCustomers((prev) =>
-        prev.map((c) =>
-          c.id === data.customerId
-            ? {
-                ...c,
-                currentBalance: Math.max(0, c.currentBalance + balanceChange),
-                lastTransaction: data.date,
-              }
-            : c
-        )
-      );
-    }
+  const addTransaction = useCallback(async (data) => {
+    const created = await transactionsApi.createTransaction(data);
+    setTransactions((prev) => [created, ...prev]);
+    await refreshCustomers();
     logActivity(`Transaction: ${data.type} ₹${data.amount}`, 'transaction');
-    return newTx;
-  }, [customers, logActivity]);
+    return created;
+  }, [refreshCustomers, logActivity]);
 
   const getCustomerTransactions = useCallback(
     (customerId) => transactions.filter((t) => t.customerId === customerId),
     [transactions]
   );
 
-  const recordPayment = useCallback(({ customerId, amount, method = 'Cash', date, notes, invoiceId }) => {
+  const recordPayment = useCallback(async ({ customerId, amount, method = 'Cash', date, notes, invoiceId }) => {
     const amt = Number(amount) || 0;
     if (!customerId || amt <= 0) return null;
 
-    const tx = addTransaction({
-      date: date || new Date().toISOString().split('T')[0],
+    const tx = await transactionsApi.recordPayment({
       customerId,
-      type: 'payment',
-      itemDescription: invoiceId ? `Payment against invoice` : 'Payment received',
-      quantity: 1,
-      rate: amt,
       amount: amt,
-      notes: notes || '',
-      paymentMethod: method,
+      method,
+      date: date || new Date().toISOString().split('T')[0],
+      notes,
+      invoiceId,
     });
-
-    if (invoiceId) {
-      setInvoices((prev) =>
-        prev.map((inv) => {
-          if (inv.id !== invoiceId) return inv;
-          const paid = (Number(inv.paidAmount) || 0) + amt;
-          const balance = Math.max(0, (Number(inv.total) || 0) - paid);
-          let status = 'unpaid';
-          if (paid >= inv.total) status = 'paid';
-          else if (paid > 0) status = 'partial';
-          return { ...inv, paidAmount: paid, balance, status };
-        })
-      );
-    }
-
+    setTransactions((prev) => [tx, ...prev]);
+    await Promise.all([refreshCustomers(), invoicesApi.listInvoices().then(setInvoices)]);
     logActivity(`Payment recorded: ₹${amt}`, 'payment');
     return tx;
-  }, [addTransaction, logActivity]);
+  }, [refreshCustomers, logActivity]);
 
-  const addInvoice = useCallback((data) => {
-    const prefix = settings.invoicePrefix || profile.invoicePrefix || 'SGT';
-    const totals = calcInvoiceTotals(data.items, data.discount, data.taxRate);
-    const paid = Number(data.paidAmount) || 0;
-    const total = totals.total;
-    const balance = Math.max(0, total - paid);
-    let status = 'unpaid';
-    if (paid >= total && total > 0) status = 'paid';
-    else if (paid > 0) status = 'partial';
+  const addInvoice = useCallback(async (data) => {
+    const created = await invoicesApi.createInvoice(data);
+    setInvoices((prev) => [created, ...prev]);
+    await Promise.all([refreshCustomers(), refreshTransactions()]);
+    logActivity(`Invoice created: ${created.invoiceNumber}`, 'invoice');
+    return created;
+  }, [refreshCustomers, refreshTransactions, logActivity]);
 
-    const customer = customers.find((c) => c.id === data.customerId);
-    const newInvoice = {
-      ...data,
-      ...totals,
-      id: generateId('inv'),
-      invoiceNumber: data.invoiceNumber || nextInvoiceNumber(invoices, prefix),
-      customerName: customer?.name || data.customerName || '',
-      customerBusiness: customer?.businessName || data.customerBusiness || '',
-      customerAddress: customer?.address || data.customerAddress || '',
-      customerGst: customer?.gst || data.customerGst || '',
-      customerMobile: customer?.mobile || data.customerMobile || '',
-      paidAmount: paid,
-      balance,
-      status: data.status || status,
-      createdAt: new Date().toISOString(),
-    };
-    setInvoices((prev) => [newInvoice, ...prev]);
-    logActivity(`Invoice created: ${newInvoice.invoiceNumber}`, 'invoice');
-    return newInvoice;
-  }, [customers, invoices, settings.invoicePrefix, profile.invoicePrefix, logActivity]);
-
-  const updateInvoice = useCallback((id, data) => {
-    setInvoices((prev) =>
-      prev.map((inv) => {
-        if (inv.id !== id) return inv;
-        const merged = { ...inv, ...data };
-        if (data.items || data.discount != null || data.taxRate != null) {
-          const totals = calcInvoiceTotals(merged.items, merged.discount, merged.taxRate);
-          const paid = Number(merged.paidAmount) || 0;
-          const balance = Math.max(0, totals.total - paid);
-          let status = merged.status;
-          if (paid >= totals.total && totals.total > 0) status = 'paid';
-          else if (paid > 0) status = 'partial';
-          else status = 'unpaid';
-          return { ...merged, ...totals, balance, status };
-        }
-        return merged;
-      })
-    );
+  const updateInvoice = useCallback(async (id, data) => {
+    const updated = await invoicesApi.updateInvoice(id, data);
+    setInvoices((prev) => prev.map((inv) => (inv.id === id ? updated : inv)));
+    return updated;
   }, []);
 
-  const deleteInvoice = useCallback((id) => {
+  const deleteInvoice = useCallback(async (id) => {
+    await invoicesApi.deleteInvoice(id);
     setInvoices((prev) => prev.filter((i) => i.id !== id));
+    await refreshCustomers();
     logActivity('Invoice deleted', 'invoice');
+  }, [refreshCustomers, logActivity]);
+
+  const duplicateInvoice = useCallback(async (id) => {
+    const created = await invoicesApi.duplicateInvoice(id);
+    setInvoices((prev) => [created, ...prev]);
+    logActivity(`Invoice duplicated: ${created.invoiceNumber}`, 'invoice');
+    return created;
   }, [logActivity]);
 
-  const duplicateInvoice = useCallback((id) => {
-    const source = invoices.find((i) => i.id === id);
-    if (!source) return null;
-    const prefix = settings.invoicePrefix || profile.invoicePrefix || 'SGT';
-    return addInvoice({
-      ...source,
-      invoiceNumber: nextInvoiceNumber(invoices, prefix),
-      date: new Date().toISOString().split('T')[0],
-      paidAmount: 0,
-      status: 'unpaid',
-      notes: `Duplicated from ${source.invoiceNumber}`,
-    });
-  }, [invoices, addInvoice, settings.invoicePrefix, profile.invoicePrefix]);
-
   const getInvoice = useCallback(
-    (id) => invoices.find((i) => i.id === id),
+    (id) => invoices.find((i) => i.id === id || String(i.pk) === String(id)),
     [invoices]
   );
 
-  const importInvoiceAsTransaction = useCallback((invoiceData) => {
+  const importInvoiceAsTransaction = useCallback(async (invoiceData) => {
     let customer = customers.find(
       (c) =>
         (invoiceData.customerMobile && c.mobile === invoiceData.customerMobile) ||
@@ -247,7 +229,7 @@ export function AppProvider({ children }) {
     );
 
     if (!customer && invoiceData.customerName) {
-      customer = addCustomer({
+      customer = await addCustomer({
         name: invoiceData.customerName,
         mobile: invoiceData.customerMobile || '9000000000',
         businessName: invoiceData.businessName || invoiceData.customerBusiness || invoiceData.customerName,
@@ -263,25 +245,10 @@ export function AppProvider({ children }) {
       ? invoiceData.items
       : [{ description: 'Invoice import', quantity: 1, rate: invoiceData.total, amount: invoiceData.total }];
 
-    const txs = items.map((item) =>
-      addTransaction({
-        date: invoiceData.date || new Date().toISOString().split('T')[0],
-        customerId: customer?.id,
-        type: 'credit',
-        itemDescription: item.description,
-        quantity: Number(item.quantity) || 1,
-        rate: Number(item.rate) || Number(item.amount) || 0,
-        amount: Number(item.amount) || (Number(item.quantity) || 1) * (Number(item.rate) || 0),
-        notes: `From invoice ${invoiceData.invoiceNumber || ''}`.trim(),
-        paymentMethod: invoiceData.paymentMethod || 'Credit',
-      })
-    );
-
-    const invoice = addInvoice({
+    const invoice = await addInvoice({
       ...invoiceData,
       customerId: customer?.id,
-      items: items.map((item, i) => ({
-        id: i + 1,
+      items: items.map((item) => ({
         description: item.description,
         hsn: item.hsn || '',
         quantity: Number(item.quantity) || 1,
@@ -290,43 +257,71 @@ export function AppProvider({ children }) {
       })),
       paymentMethod: invoiceData.paymentMethod || 'Credit',
       terms: invoiceData.terms || 'Payment due within 15 days.',
-      dueDate: invoiceData.dueDate || '',
+      dueDate: invoiceData.dueDate || null,
       paidAmount: invoiceData.paidAmount || 0,
     });
 
     logActivity('Invoice imported via OCR/upload', 'invoice');
-    return { customer, transactions: txs, invoice };
-  }, [customers, addCustomer, addTransaction, addInvoice, logActivity]);
+    return { customer, transactions: [], invoice };
+  }, [customers, addCustomer, addInvoice, logActivity]);
 
-  const restoreBackup = useCallback((data) => {
-    if (data.customers) setCustomers(data.customers);
-    if (data.transactions) setTransactions(data.transactions);
-    if (data.invoices) setInvoices(data.invoices);
-    if (data.notifications) setNotifications(data.notifications);
-    if (data.settings) setSettings({ ...defaultSettings, ...data.settings });
-    if (data.profile) setProfile({ ...businessProfile, ...data.profile });
-    if (data.activityLog) setActivityLog(data.activityLog);
-    logActivity('Backup restored', 'system');
-  }, [logActivity]);
+  const setSettings = useCallback(async (next) => {
+    const value = typeof next === 'function' ? next(settings) : next;
+    setSettingsState(value);
+    try {
+      const saved = await authApi.updateSettings(value);
+      setSettingsState((prev) => ({ ...prev, ...saved }));
+      return saved;
+    } catch (err) {
+      setSettingsState(settings);
+      throw err;
+    }
+  }, [settings]);
 
-  const resetDemoData = useCallback(() => {
-    setCustomers(initialCustomers);
-    setTransactions(initialTransactions);
-    setInvoices(initialInvoices);
-    setNotifications(initialNotifications);
-    setSettings(defaultSettings);
-    setProfile(businessProfile);
-    setActivityLog([{ id: generateId('act'), type: 'system', message: 'Demo data reset', at: new Date().toISOString() }]);
+  const setProfile = useCallback(async (next) => {
+    const value = typeof next === 'function' ? next(profile) : next;
+    setProfileState(value);
+    try {
+      const { logo, ...rest } = value;
+      const payload = { ...rest };
+      // Don't send data-URL logos as text fields
+      if (typeof logo === 'string' && logo.startsWith('data:')) {
+        delete payload.logo;
+      } else if (logo === null || typeof logo === 'string') {
+        // keep URL as-is; backend ignores unknown read-only
+      }
+      const saved = await authApi.updateProfile(payload);
+      setProfileState((prev) => ({ ...prev, ...saved }));
+      return saved;
+    } catch (err) {
+      setProfileState(profile);
+      throw err;
+    }
+  }, [profile]);
+
+  const uploadLogo = useCallback(async (file) => {
+    const saved = await authApi.updateProfileLogo(file);
+    setProfileState((prev) => ({ ...prev, ...saved }));
+    return saved;
   }, []);
 
-  const markNotificationRead = useCallback((id) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  const restoreBackup = useCallback(() => {
+    throw new Error('Backup restore is local-only. Use API seed or re-enter data.');
   }, []);
 
-  const markAllNotificationsRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const resetDemoData = useCallback(async () => {
+    await refreshAll();
+    logActivity('Data refreshed from server', 'system');
+  }, [refreshAll, logActivity]);
+
+  const markNotificationRead = useCallback(async (id) => {
+    const updated = await notificationsApi.markNotificationRead(id);
+    setNotifications((prev) => prev.map((n) => (n.id === id ? updated : n)));
+  }, []);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    await notificationsApi.markAllNotificationsRead();
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true, isRead: true })));
   }, []);
 
   const unreadCount = useMemo(
@@ -336,17 +331,17 @@ export function AppProvider({ children }) {
 
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    // Prefer fixed demo date if today txs empty (keeps demo dashboard alive)
     const todayTxs = transactions.filter((t) => t.date === today);
-    const demoTxs = transactions.filter((t) => t.date === '2026-08-03');
-    const useTxs = todayTxs.length ? todayTxs : demoTxs;
 
-    const todaySales = useTxs.filter((t) => t.type === 'credit').reduce((s, t) => s + t.amount, 0);
-    const todayCollection = useTxs.filter((t) => t.type === 'payment').reduce((s, t) => s + t.amount, 0);
-    const pendingAmount = customers.reduce((s, c) => s + c.currentBalance, 0);
-    const overdueCustomers = customers.filter((c) => c.status === 'overdue').length;
-    const unpaidInvoices = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partial');
-    const invoiceDue = unpaidInvoices.reduce((s, i) => s + (i.balance || 0), 0);
+    const todaySales = todayTxs.filter((t) => t.type === 'credit').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const todayCollection = Number(dashboardExtra?.stats?.todayCollection)
+      || todayTxs.filter((t) => t.type === 'payment').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const pendingAmount = Number(dashboardExtra?.stats?.totalReceivable)
+      || customers.reduce((s, c) => s + Number(c.currentBalance || 0), 0);
+    const overdueCustomers = Number(dashboardExtra?.stats?.overdueCustomers)
+      || customers.filter((c) => c.status === 'overdue').length;
+    const unpaidInvoicesList = invoices.filter((i) => i.status === 'unpaid' || i.status === 'overdue' || i.status === 'partial');
+    const invoiceDue = unpaidInvoicesList.reduce((s, i) => s + Number(i.balance || 0), 0);
 
     return {
       todaySales,
@@ -356,14 +351,14 @@ export function AppProvider({ children }) {
       totalCustomers: customers.length,
       totalTransactions: transactions.length,
       totalInvoices: invoices.length,
-      unpaidInvoices: unpaidInvoices.length,
+      unpaidInvoices: Number(dashboardExtra?.stats?.unpaidInvoices) || unpaidInvoicesList.length,
       overdueCustomers,
       invoiceDue,
       collectionRate: pendingAmount + todayCollection > 0
         ? Math.round((todayCollection / (pendingAmount + todayCollection || 1)) * 100)
         : 0,
     };
-  }, [customers, transactions, invoices]);
+  }, [customers, transactions, invoices, dashboardExtra]);
 
   const value = {
     customers,
@@ -378,11 +373,18 @@ export function AppProvider({ children }) {
     commandOpen,
     unreadCount,
     stats,
+    dataLoading,
+    dataError,
+    dataReady,
+    dashboardExtra,
+    analyticsData,
+    reportsData,
     setSidebarOpen,
     setSidebarCollapsed,
     setCommandOpen,
     setSettings,
     setProfile,
+    uploadLogo,
     addCustomer,
     updateCustomer,
     deleteCustomer,
@@ -398,6 +400,7 @@ export function AppProvider({ children }) {
     importInvoiceAsTransaction,
     restoreBackup,
     resetDemoData,
+    refreshAll,
     logActivity,
     markNotificationRead,
     markAllNotificationsRead,

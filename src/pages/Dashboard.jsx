@@ -37,10 +37,26 @@ const item = {
 };
 
 export default function Dashboard() {
-  const { stats, transactions, notifications, activityLog, invoices } = useApp();
+  const { stats, transactions, notifications, activityLog, invoices, analyticsData, reportsData } = useApp();
   const recentTxs = transactions.slice(0, 6);
   const recentActivity = notifications.slice(0, 5);
   const unpaidInvoices = invoices.filter((i) => i.status !== 'paid').slice(0, 5);
+
+  const chartMonthly = (analyticsData?.monthlyTrend?.length
+    ? analyticsData.monthlyTrend.map((m) => ({
+        month: m.month?.slice(5) || m.month,
+        credit: m.credit || 0,
+        collection: m.payment || 0,
+      }))
+    : monthlyCollection);
+
+  const chartPie = reportsData?.summary
+    ? [
+        { name: 'Credit', value: reportsData.summary.credit || 0, color: '#2563EB' },
+        { name: 'Paid', value: reportsData.summary.payment || 0, color: '#10B981' },
+        { name: 'Pending', value: Math.max(0, (reportsData.summary.credit || 0) - (reportsData.summary.payment || 0)), color: '#F59E0B' },
+      ]
+    : creditVsPaid;
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
@@ -82,7 +98,7 @@ export default function Dashboard() {
           <CardHeader title="Monthly Collection" subtitle="Credit vs Collection trend" />
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyCollection}>
+              <AreaChart data={chartMonthly}>
                 <defs>
                   <linearGradient id="gCredit" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#2563EB" stopOpacity={0.15} />
@@ -110,7 +126,7 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={creditVsPaid}
+                  data={chartPie}
                   cx="50%"
                   cy="45%"
                   innerRadius={55}
@@ -118,7 +134,7 @@ export default function Dashboard() {
                   paddingAngle={3}
                   dataKey="value"
                 >
-                  {creditVsPaid.map((entry, i) => (
+                  {chartPie.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
                 </Pie>

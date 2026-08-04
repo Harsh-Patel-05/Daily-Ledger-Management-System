@@ -226,10 +226,14 @@ export default function InvoiceList() {
       <ConfirmationDialog
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onConfirm={() => {
-          deleteInvoice(deleteId);
-          setDeleteId(null);
-          toast.success('Invoice deleted');
+        onConfirm={async () => {
+          try {
+            await deleteInvoice(deleteId);
+            setDeleteId(null);
+            toast.success('Invoice deleted');
+          } catch (err) {
+            toast.error(err.message || 'Delete failed');
+          }
         }}
         title="Delete Invoice"
         message="Are you sure you want to delete this invoice?"

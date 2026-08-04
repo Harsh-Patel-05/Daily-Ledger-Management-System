@@ -37,10 +37,14 @@ export default function CustomerList() {
 
   useEffect(() => { resetPage(); }, [debouncedSearch, statusFilter]);
 
-  const handleDelete = () => {
-    deleteCustomer(deleteId);
-    setDeleteId(null);
-    toast.success('Customer deleted successfully');
+  const handleDelete = async () => {
+    try {
+      await deleteCustomer(deleteId);
+      setDeleteId(null);
+      toast.success('Customer deleted successfully');
+    } catch (err) {
+      toast.error(err.message || 'Delete failed');
+    }
   };
 
   const columns = [

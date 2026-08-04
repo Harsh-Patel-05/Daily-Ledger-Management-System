@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FaEnvelope, FaArrowLeft } from 'react-icons/fa';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -9,6 +10,7 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const { forgotPassword } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -19,10 +21,17 @@ export default function ForgotPassword() {
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
-    toast.success('OTP sent to your email');
-    navigate('/otp-verification', { state: { email } });
+    try {
+      const res = await forgotPassword(email);
+      toast.success('OTP sent to your email');
+      navigate('/otp-verification', {
+        state: { email, demoOtp: res.otp_demo || null },
+      });
+    } catch (err) {
+      toast.error(err.message || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

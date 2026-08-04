@@ -20,11 +20,12 @@ const tabs = [
 
 export default function Reports() {
   const [activeTab, setActiveTab] = useState('daily');
-  const { transactions, customers, stats } = useApp();
+  const { transactions, customers, stats, reportsData } = useApp();
 
+  const today = new Date().toISOString().split('T')[0];
   const todayTxs = useMemo(
-    () => transactions.filter((t) => t.date === '2026-08-03'),
-    [transactions]
+    () => transactions.filter((t) => t.date === today),
+    [transactions, today]
   );
 
   const outstanding = useMemo(

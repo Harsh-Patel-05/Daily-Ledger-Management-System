@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { useStackedModal } from '../../hooks/useStackedModal';
-import { calcInvoiceTotals, nextInvoiceNumber } from '../../utils/invoiceUtils';
+import { calcInvoiceTotals } from '../../utils/invoiceUtils';
+import { nextInvoiceNumber as fetchNextInvoiceNumber } from '../../api/invoices';
 import { INVOICE_FORMATS, getInvoiceFormat } from '../../data/invoiceFormats';
 import { formatCurrency } from '../../utils/formatters';
 import Modal from '../ui/Modal';
@@ -14,11 +15,11 @@ import Button from '../ui/Button';
 
 export default function QuickCreateInvoiceModal() {
   const { inStack, open, payload, closeModal, openModal } = useStackedModal('quickInvoice');
-  const { customers, invoices, settings, profile, addInvoice } = useApp();
+  const { customers, settings, profile, addInvoice } = useApp();
   const toast = useToast();
   const navigate = useNavigate();
 
-  const prefix = settings.invoicePrefix || profile.invoicePrefix || 'SGT';
+  const prefix = settings.invoicePrefix || profile.invoicePrefix || 'INV';
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -26,7 +27,7 @@ export default function QuickCreateInvoiceModal() {
   useEffect(() => {
     if (inStack && !form) {
       setForm({
-        invoiceNumber: nextInvoiceNumber(invoices, prefix),
+        invoiceNumber: '',
         date: new Date().toISOString().split('T')[0],
         customerId: payload.customerId || '',
         description: '',
@@ -37,6 +38,13 @@ export default function QuickCreateInvoiceModal() {
         format: payload.format || 'classic',
         paymentMethod: 'Credit',
       });
+      fetchNextInvoiceNumber()
+        .then((res) => {
+          if (res?.invoiceNumber) {
+            setForm((f) => (f ? { ...f, invoiceNumber: res.invoiceNumber } : f));
+          }
+        })
+        .catch(() => {});
     }
     if (!inStack) setForm(null);
   }, [inStack]);
@@ -67,32 +75,36 @@ export default function QuickCreateInvoiceModal() {
     if (Object.keys(errs).length) return;
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
-    const invoice = addInvoice({
-      invoiceNumber: form.invoiceNumber,
-      date: form.date,
-      dueDate: '',
-      customerId: form.customerId,
-      items: [{
-        id: 1,
-        description: form.description,
-        hsn: '',
-        quantity: Number(form.quantity) || 1,
-        rate: Number(form.rate) || 0,
-        amount,
-      }],
-      discount: Number(form.discount) || 0,
-      taxRate: Number(form.taxRate) || 0,
-      paidAmount: 0,
-      paymentMethod: form.paymentMethod,
-      notes: 'Created via quick invoice modal',
-      terms: `Payment due within ${settings.defaultPaymentTerms || 15} days.`,
-      format: form.format,
-    });
-    setLoading(false);
-    toast.success(`Invoice ${invoice.invoiceNumber} created`);
-    closeModal();
-    navigate(`/invoices/${invoice.id}`);
+    try {
+      const invoice = await addInvoice({
+        invoiceNumber: form.invoiceNumber,
+        date: form.date,
+        dueDate: '',
+        customerId: form.customerId,
+        items: [{
+          id: 1,
+          description: form.description,
+          hsn: '',
+          quantity: Number(form.quantity) || 1,
+          rate: Number(form.rate) || 0,
+          amount,
+        }],
+        discount: Number(form.discount) || 0,
+        taxRate: Number(form.taxRate) || 0,
+        paidAmount: 0,
+        paymentMethod: form.paymentMethod,
+        notes: 'Created via quick invoice modal',
+        terms: `Payment due within ${settings.defaultPaymentTerms || 15} days.`,
+        format: form.format,
+      });
+      toast.success(`Invoice ${invoice.invoiceNumber} created`);
+      closeModal();
+      navigate(`/invoices/${invoice.id}`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to create invoice');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const fmt = getInvoiceFormat(form.format);

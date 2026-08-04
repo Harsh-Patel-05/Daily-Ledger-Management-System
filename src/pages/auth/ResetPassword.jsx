@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { FaLock, FaEye, FaEyeSlash, FaArrowLeft } from 'react-icons/fa';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
@@ -11,22 +12,32 @@ export default function ResetPassword() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const { resetPassword } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const email = location.state?.email || '';
+  const otp = location.state?.otp || '';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = {};
+    if (!email || !otp) errs.password = 'Session expired — restart forgot password';
     if (!password || password.length < 6) errs.password = 'Password must be at least 6 characters';
     if (password !== confirm) errs.confirm = 'Passwords do not match';
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
-    toast.success('Password reset successfully');
-    navigate('/login');
+    try {
+      await resetPassword({ email, otp, password, confirm_password: confirm });
+      toast.success('Password reset successfully');
+      navigate('/login');
+    } catch (err) {
+      toast.error(err.message || 'Reset failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

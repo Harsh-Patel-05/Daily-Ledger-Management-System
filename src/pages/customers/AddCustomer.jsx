@@ -40,14 +40,18 @@ export default function AddCustomer() {
     e.preventDefault();
     if (!validate()) return;
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    const customer = addCustomer({
-      ...form,
-      creditLimit: Number(form.creditLimit) || 0,
-    });
-    setLoading(false);
-    toast.success('Customer added successfully');
-    navigate(`/customers/${customer.id}`);
+    try {
+      const customer = await addCustomer({
+        ...form,
+        creditLimit: Number(form.creditLimit) || 0,
+      });
+      toast.success('Customer added successfully');
+      navigate(`/customers/${customer.id}`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to add customer');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

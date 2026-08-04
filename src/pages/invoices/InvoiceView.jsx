@@ -45,28 +45,36 @@ export default function InvoiceView() {
     }
   };
 
-  const handleSyncLedger = () => {
-    (invoice.items || []).forEach((item) => {
-      addTransaction({
-        date: invoice.date,
-        customerId: invoice.customerId,
-        type: 'credit',
-        itemDescription: item.description,
-        quantity: item.quantity,
-        rate: item.rate,
-        amount: item.amount,
-        notes: `From ${invoice.invoiceNumber}`,
-        paymentMethod: invoice.paymentMethod || 'Credit',
-      });
-    });
-    toast.success('Invoice items synced to ledger');
+  const handleSyncLedger = async () => {
+    try {
+      for (const item of invoice.items || []) {
+        await addTransaction({
+          date: invoice.date,
+          customerId: invoice.customerId,
+          type: 'credit',
+          itemDescription: item.description,
+          quantity: item.quantity,
+          rate: item.rate,
+          amount: item.amount,
+          notes: `From ${invoice.invoiceNumber}`,
+          paymentMethod: invoice.paymentMethod || 'Credit',
+        });
+      }
+      toast.success('Invoice items synced to ledger');
+    } catch (err) {
+      toast.error(err.message || 'Sync failed');
+    }
   };
 
-  const handleDuplicate = () => {
-    const copy = duplicateInvoice(id);
-    if (copy) {
-      toast.success(`Duplicated as ${copy.invoiceNumber}`);
-      navigate(`/invoices/${copy.id}`);
+  const handleDuplicate = async () => {
+    try {
+      const copy = await duplicateInvoice(id);
+      if (copy) {
+        toast.success(`Duplicated as ${copy.invoiceNumber}`);
+        navigate(`/invoices/${copy.id}`);
+      }
+    } catch (err) {
+      toast.error(err.message || 'Duplicate failed');
     }
   };
 
@@ -157,10 +165,14 @@ export default function InvoiceView() {
       <ConfirmationDialog
         open={showDelete}
         onClose={() => setShowDelete(false)}
-        onConfirm={() => {
-          deleteInvoice(id);
-          toast.success('Invoice deleted');
-          navigate('/invoices');
+        onConfirm={async () => {
+          try {
+            await deleteInvoice(id);
+            toast.success('Invoice deleted');
+            navigate('/invoices');
+          } catch (err) {
+            toast.error(err.message || 'Delete failed');
+          }
         }}
         title="Delete Invoice"
         message={`Delete ${invoice.invoiceNumber}? This cannot be undone.`}

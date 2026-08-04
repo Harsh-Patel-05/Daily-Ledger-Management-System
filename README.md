@@ -1,18 +1,14 @@
 # Daily Ledger Management System
 
-Professional React frontend for Indian shop ledger management (Roj Mel style).
+Indian shop ledger (Roj Mel) — React frontend + Django REST backend.
 
 ## Tech Stack
 
-- React 19 + Vite
-- React Router
-- Context API
-- Tailwind CSS v4
-- Recharts
-- Framer Motion
-- React Icons
+**Frontend:** React 19 + Vite · React Router · Context API · Tailwind CSS v4 · Recharts · Framer Motion  
 
-## Getting Started
+**Backend:** Django 6 · DRF · SimpleJWT · django-filter · CORS · SQLite (dev)
+
+## Frontend
 
 ```bash
 npm install
@@ -21,9 +17,30 @@ npm run dev
 
 Open [http://localhost:5173](http://localhost:5173)
 
+Copy `.env.example` → `.env` if needed (`VITE_API_URL=http://127.0.0.1:8001/api`). Frontend talks to Django after login.
+
+## Backend
+
+```powershell
+cd backend
+.\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python manage.py migrate
+python manage.py seed_demo
+python manage.py runserver 8001
+```
+
+- API docs: http://127.0.0.1:8001/api/docs/  
+- Full API notes: [backend/README.md](backend/README.md)
+
 ## Demo Login
 
-Email and password are pre-filled on the login page. Click **Sign In**.
+| | |
+|--|--|
+| Email | `mukesh@ganeshtraders.com` |
+| Password | `password123` |
+
+Same credentials for frontend demo and API. Click **Sign In** on the login page.
 
 ## Features
 

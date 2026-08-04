@@ -59,21 +59,25 @@ export default function AddTransaction() {
     if (Object.keys(errs).length) return;
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    addTransaction({
-      date: form.date,
-      customerId: form.customerId || customers[0]?.id,
-      type: form.type,
-      itemDescription: form.itemDescription || TRANSACTION_TYPES[form.type]?.label || form.type,
-      quantity: Number(form.quantity) || 1,
-      rate: Number(form.rate) || Number(form.amount),
-      amount: Number(form.amount),
-      notes: form.notes,
-      paymentMethod: form.paymentMethod,
-    });
-    setLoading(false);
-    toast.success('Transaction created successfully');
-    navigate('/transactions');
+    try {
+      await addTransaction({
+        date: form.date,
+        customerId: form.customerId || customers[0]?.id,
+        type: form.type,
+        itemDescription: form.itemDescription || TRANSACTION_TYPES[form.type]?.label || form.type,
+        quantity: Number(form.quantity) || 1,
+        rate: Number(form.rate) || Number(form.amount),
+        amount: Number(form.amount),
+        notes: form.notes,
+        paymentMethod: form.paymentMethod,
+      });
+      toast.success('Transaction created successfully');
+      navigate('/transactions');
+    } catch (err) {
+      toast.error(err.message || 'Failed to create transaction');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

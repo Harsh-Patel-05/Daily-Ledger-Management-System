@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { FaArrowLeft } from 'react-icons/fa';
+import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
 
@@ -9,10 +10,12 @@ export default function OTPVerification() {
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(60);
   const inputs = useRef([]);
+  const { verifyOtp, forgotPassword } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email || 'your email';
+  const email = location.state?.email || '';
+  const demoOtp = location.state?.demoOtp;
 
   useEffect(() => {
     if (timer <= 0) return;
@@ -47,15 +50,25 @@ export default function OTPVerification() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!email) {
+      toast.error('Email missing — go back and try again');
+      return;
+    }
     if (otp.some((d) => !d)) {
       toast.error('Please enter the complete OTP');
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    setLoading(false);
-    toast.success('OTP verified successfully');
-    navigate('/reset-password', { state: { email } });
+    try {
+      const code = otp.join('');
+      await verifyOtp(email, code);
+      toast.success('OTP verified successfully');
+      navigate('/reset-password', { state: { email, otp: code } });
+    } catch (err) {
+      toast.error(err.message || 'Invalid OTP');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -65,7 +78,11 @@ export default function OTPVerification() {
       </Link>
       <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-1">Verify OTP</h2>
       <p className="text-sm text-muted mb-8">
-        Enter the 6-digit code sent to <span className="font-medium text-slate-700 dark:text-slate-200">{email}</span>
+        Enter the 6-digit code sent to{' '}
+        <span className="font-medium text-slate-700 dark:text-slate-200">{email || 'your email'}</span>
+        {demoOtp ? (
+          <span className="block mt-2 text-xs text-amber-600">Dev OTP: <strong>{demoOtp}</strong></span>
+        ) : null}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -95,7 +112,16 @@ export default function OTPVerification() {
           ) : (
             <button
               type="button"
-              onClick={() => { setTimer(60); toast.info('OTP resent'); }}
+              onClick={async () => {
+                try {
+                  const res = await forgotPassword(email);
+                  setTimer(60);
+                  if (res.otp_demo) toast.info(`OTP resent: ${res.otp_demo}`);
+                  else toast.info('OTP resent');
+                } catch (err) {
+                  toast.error(err.message || 'Failed to resend');
+                }
+              }}
               className="text-primary font-medium hover:underline"
             >
               Resend OTP

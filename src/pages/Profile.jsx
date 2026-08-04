@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FaEnvelope, FaPhone, FaMapMarkerAlt, FaIdCard, FaLock, FaCamera } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { Breadcrumbs, Card, CardHeader, Avatar, Input, Button } from '../components/ui';
 import { formatPhone, formatDate } from '../utils/formatters';
@@ -8,14 +9,20 @@ import { DEFAULT_LOGO } from '../assets/defaultLogo';
 import { fileToDataUrl } from '../utils/ocr';
 
 export default function Profile() {
-  const { profile, setProfile } = useApp();
+  const { profile, setProfile, uploadLogo } = useApp();
+  const { changePassword } = useAuth();
   const toast = useToast();
 
   const [passwords, setPasswords] = useState({ current: '', newPass: '', confirm: '' });
   const [passLoading, setPassLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(profile);
+  const [saving, setSaving] = useState(false);
   const logoInputRef = useRef(null);
+
+  useEffect(() => {
+    setForm(profile);
+  }, [profile]);
 
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -28,15 +35,28 @@ export default function Profile() {
       toast.error('Logo must be under 2MB');
       return;
     }
-    const dataUrl = await fileToDataUrl(file);
-    setProfile({ ...profile, logo: dataUrl });
-    toast.success('Shop logo updated — it will appear on invoices');
+    try {
+      await uploadLogo(file);
+      toast.success('Shop logo updated — it will appear on invoices');
+    } catch (err) {
+      // Fallback preview if upload fails
+      const dataUrl = await fileToDataUrl(file);
+      setForm((f) => ({ ...f, logo: dataUrl }));
+      toast.error(err.message || 'Logo upload failed');
+    }
   };
 
-  const handleSaveProfile = () => {
-    setProfile(form);
-    setEditMode(false);
-    toast.success('Profile updated successfully');
+  const handleSaveProfile = async () => {
+    setSaving(true);
+    try {
+      await setProfile(form);
+      setEditMode(false);
+      toast.success('Profile updated successfully');
+    } catch (err) {
+      toast.error(err.message || 'Failed to save profile');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleChangePassword = async (e) => {
@@ -54,10 +74,19 @@ export default function Profile() {
       return;
     }
     setPassLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    setPassLoading(false);
-    setPasswords({ current: '', newPass: '', confirm: '' });
-    toast.success('Password changed successfully');
+    try {
+      await changePassword({
+        current_password: passwords.current,
+        new_password: passwords.newPass,
+        confirm_password: passwords.confirm,
+      });
+      setPasswords({ current: '', newPass: '', confirm: '' });
+      toast.success('Password changed successfully');
+    } catch (err) {
+      toast.error(err.message || 'Password change failed');
+    } finally {
+      setPassLoading(false);
+    }
   };
 
   return (
@@ -99,7 +128,7 @@ export default function Profile() {
               action={
                 editMode ? (
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveProfile}>Save</Button>
+                    <Button size="sm" onClick={handleSaveProfile} loading={saving}>Save</Button>
                     <Button size="sm" variant="outline" onClick={() => { setEditMode(false); setForm(profile); }}>Cancel</Button>
                   </div>
                 ) : (

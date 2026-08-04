@@ -39,18 +39,22 @@ export default function QuickAddCustomerModal() {
     if (Object.keys(errs).length) return;
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
-    const customer = addCustomer({
-      ...form,
-      creditLimit: Number(form.creditLimit) || 0,
-      email: '',
-      notes: 'Added via quick modal',
-    });
-    setLoading(false);
-    toast.success(`${customer.name} added`);
-    closeModal();
-    if (current.payload?.goToProfile) navigate(`/customers/${customer.id}`);
-    current.payload?.onCreated?.(customer);
+    try {
+      const customer = await addCustomer({
+        ...form,
+        creditLimit: Number(form.creditLimit) || 0,
+        email: '',
+        notes: 'Added via quick modal',
+      });
+      toast.success(`${customer.name} added`);
+      closeModal();
+      if (current.payload?.goToProfile) navigate(`/customers/${customer.id}`);
+      current.payload?.onCreated?.(customer);
+    } catch (err) {
+      toast.error(err.message || 'Failed to add customer');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

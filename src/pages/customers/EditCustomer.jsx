@@ -54,11 +54,15 @@ export default function EditCustomer() {
     if (Object.keys(errs).length) return;
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
-    updateCustomer(id, { ...form, creditLimit: Number(form.creditLimit) || 0 });
-    setLoading(false);
-    toast.success('Customer updated successfully');
-    navigate(`/customers/${id}`);
+    try {
+      await updateCustomer(id, { ...form, creditLimit: Number(form.creditLimit) || 0 });
+      toast.success('Customer updated successfully');
+      navigate(`/customers/${id}`);
+    } catch (err) {
+      toast.error(err.message || 'Update failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

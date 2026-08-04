@@ -121,20 +121,24 @@ export default function UploadInvoice() {
       return;
     }
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
-    const matched = customers.find(
-      (c) =>
-        (extracted.customerMobile && c.mobile === extracted.customerMobile) ||
-        c.name.toLowerCase() === extracted.customerName.toLowerCase()
-    );
-    const { invoice } = importInvoiceAsTransaction({
-      ...extracted,
-      customerId: matched?.id,
-      customerBusiness: extracted.businessName,
-    });
-    setSaving(false);
-    toast.success('Invoice imported — ledger & customer updated');
-    navigate(`/invoices/${invoice.id}`);
+    try {
+      const matched = customers.find(
+        (c) =>
+          (extracted.customerMobile && c.mobile === extracted.customerMobile) ||
+          c.name.toLowerCase() === extracted.customerName.toLowerCase()
+      );
+      const { invoice } = await importInvoiceAsTransaction({
+        ...extracted,
+        customerId: matched?.id,
+        customerBusiness: extracted.businessName,
+      });
+      toast.success('Invoice imported — ledger & customer updated');
+      navigate(`/invoices/${invoice.id}`);
+    } catch (err) {
+      toast.error(err.message || 'Import failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

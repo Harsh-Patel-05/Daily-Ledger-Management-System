@@ -34,18 +34,22 @@ export default function RecordPaymentModal({
       return;
     }
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 400));
-    recordPayment({
-      customerId,
-      amount: Number(amount),
-      method,
-      date,
-      notes,
-      invoiceId,
-    });
-    setLoading(false);
-    toast.success(`Payment of ${formatCurrency(Number(amount))} recorded`);
-    onClose();
+    try {
+      await recordPayment({
+        customerId,
+        amount: Number(amount),
+        method,
+        date,
+        notes,
+        invoiceId,
+      });
+      toast.success(`Payment of ${formatCurrency(Number(amount))} recorded`);
+      onClose();
+    } catch (err) {
+      toast.error(err.message || 'Payment failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

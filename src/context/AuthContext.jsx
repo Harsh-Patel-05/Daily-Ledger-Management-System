@@ -1,42 +1,58 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import {
+  getStoredUser,
+  getTokens,
+  clearAuthStorage,
+} from '../api/client';
+import * as authApi from '../api/auth';
 
 const AuthContext = createContext(null);
-
-const AUTH_KEY = 'dlms_auth';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(AUTH_KEY);
-      if (stored) setUser(JSON.parse(stored));
-    } catch {
-      localStorage.removeItem(AUTH_KEY);
-    } finally {
-      setIsLoading(false);
-    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const tokens = getTokens();
+        const stored = getStoredUser();
+        if (tokens?.access) {
+          if (stored) setUser(stored);
+          try {
+            const me = await authApi.fetchMe();
+            if (!cancelled) setUser(me);
+          } catch {
+            clearAuthStorage();
+            if (!cancelled) setUser(null);
+          }
+        } else {
+          clearAuthStorage();
+          if (!cancelled) setUser(null);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   const login = useCallback(async (email, password) => {
-    await new Promise((r) => setTimeout(r, 800));
-    if (!email || !password) throw new Error('Email and password are required');
-    const authUser = {
-      id: 'user_001',
-      name: 'Mukesh Agarwal',
-      email,
-      role: 'owner',
-      shopName: 'Shree Ganesh Traders',
-    };
-    localStorage.setItem(AUTH_KEY, JSON.stringify(authUser));
+    const authUser = await authApi.login(email, password);
     setUser(authUser);
     return authUser;
   }, []);
 
   const logout = useCallback(() => {
-    localStorage.removeItem(AUTH_KEY);
+    authApi.logout();
     setUser(null);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const me = await authApi.fetchMe();
+    setUser(me);
+    return me;
   }, []);
 
   const value = {
@@ -45,6 +61,11 @@ export function AuthProvider({ children }) {
     isLoading,
     login,
     logout,
+    refreshUser,
+    forgotPassword: authApi.forgotPassword,
+    verifyOtp: authApi.verifyOtp,
+    resetPassword: authApi.resetPassword,
+    changePassword: authApi.changePassword,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

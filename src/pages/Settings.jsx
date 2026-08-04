@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FaSave, FaDownload, FaUpload, FaUndo } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
@@ -10,7 +10,7 @@ export default function Settings() {
   const {
     settings, setSettings, profile, setProfile,
     customers, transactions, invoices, notifications, activityLog,
-    restoreBackup, resetDemoData,
+    resetDemoData,
   } = useApp();
   const { setDarkMode } = useTheme();
   const toast = useToast();
@@ -26,6 +26,20 @@ export default function Settings() {
   const [showReset, setShowReset] = useState(false);
   const fileRef = useRef(null);
 
+  useEffect(() => {
+    setForm((f) => ({ ...f, ...settings }));
+  }, [settings]);
+
+  useEffect(() => {
+    setBank({
+      bankName: profile.bankName || '',
+      bankAccount: profile.bankAccount || '',
+      bankIFSC: profile.bankIFSC || '',
+      bankBranch: profile.bankBranch || '',
+      upiId: profile.upiId || '',
+    });
+  }, [profile]);
+
   const set = (key) => (val) => {
     const value = typeof val === 'object' && val?.target ? val.target.value : val;
     setForm((f) => ({ ...f, [key]: value }));
@@ -40,13 +54,23 @@ export default function Settings() {
 
   const handleSave = async () => {
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    setSettings(form);
-    setProfile({ ...profile, ...bank, invoicePrefix: form.invoicePrefix, gst: form.gstNumber, shopName: form.businessName });
-    if (form.theme === 'dark') setDarkMode(true);
-    else if (form.theme === 'light') setDarkMode(false);
-    setLoading(false);
-    toast.success('Settings saved successfully');
+    try {
+      await setSettings(form);
+      await setProfile({
+        ...profile,
+        ...bank,
+        invoicePrefix: form.invoicePrefix,
+        gst: form.gstNumber,
+        shopName: form.businessName,
+      });
+      if (form.theme === 'dark') setDarkMode(true);
+      else if (form.theme === 'light') setDarkMode(false);
+      toast.success('Settings saved successfully');
+    } catch (err) {
+      toast.error(err.message || 'Failed to save settings');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBackup = () => {
@@ -58,27 +82,8 @@ export default function Settings() {
   };
 
   const handleRestore = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      restoreBackup(data);
-      if (data.settings) setForm({ ...settings, ...data.settings });
-      if (data.profile) {
-        setBank({
-          bankName: data.profile.bankName || '',
-          bankAccount: data.profile.bankAccount || '',
-          bankIFSC: data.profile.bankIFSC || '',
-          bankBranch: data.profile.bankBranch || '',
-          upiId: data.profile.upiId || '',
-        });
-      }
-      toast.success('Backup restored');
-    } catch {
-      toast.error('Invalid backup file');
-    }
     e.target.value = '';
+    toast.error('Local backup restore is disabled while using the live API. Use Refresh from server instead.');
   };
 
   return (
@@ -203,7 +208,7 @@ export default function Settings() {
           </Button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={handleRestore} />
           <Button variant="danger" onClick={() => setShowReset(true)}>
-            <FaUndo size={12} /> Reset Demo Data
+            <FaUndo size={12} /> Refresh from Server
           </Button>
         </div>
         <p className="text-xs text-muted mt-3">
@@ -214,16 +219,18 @@ export default function Settings() {
       <ConfirmationDialog
         open={showReset}
         onClose={() => setShowReset(false)}
-        onConfirm={() => {
-          resetDemoData();
-          setForm(settings);
-          setShowReset(false);
-          toast.success('Demo data restored');
-          window.location.reload();
+        onConfirm={async () => {
+          try {
+            await resetDemoData();
+            setShowReset(false);
+            toast.success('Data refreshed from server');
+          } catch (err) {
+            toast.error(err.message || 'Refresh failed');
+          }
         }}
-        title="Reset Demo Data"
-        message="This will wipe local changes and restore sample customers, transactions, and invoices."
-        confirmText="Reset"
+        title="Refresh from Server"
+        message="Reload customers, transactions, invoices and settings from the Django API."
+        confirmText="Refresh"
       />
     </div>
   );

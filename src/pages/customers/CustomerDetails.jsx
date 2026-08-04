@@ -36,10 +36,14 @@ export default function CustomerDetails() {
     );
   }
 
-  const handleDelete = () => {
-    deleteCustomer(id);
-    toast.success('Customer deleted');
-    navigate('/customers');
+  const handleDelete = async () => {
+    try {
+      await deleteCustomer(id);
+      toast.success('Customer deleted');
+      navigate('/customers');
+    } catch (err) {
+      toast.error(err.message || 'Delete failed');
+    }
   };
 
   return (

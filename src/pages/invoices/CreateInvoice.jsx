@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { FaArrowLeft, FaPlus, FaTrash, FaPalette } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
-import { calcInvoiceTotals, nextInvoiceNumber } from '../../utils/invoiceUtils';
+import { calcInvoiceTotals } from '../../utils/invoiceUtils';
+import { nextInvoiceNumber as fetchNextInvoiceNumber } from '../../api/invoices';
 import { INVOICE_FORMATS, getInvoiceFormat } from '../../data/invoiceFormats';
 import { formatCurrency } from '../../utils/formatters';
 import { Breadcrumbs, Card, CardHeader, Input, Dropdown, DatePicker, Button } from '../../components/ui';
@@ -12,17 +13,17 @@ import { Breadcrumbs, Card, CardHeader, Input, Dropdown, DatePicker, Button } fr
 const emptyItem = () => ({ id: Date.now(), description: '', hsn: '', quantity: 1, rate: '', amount: 0 });
 
 export default function CreateInvoice() {
-  const { customers, invoices, settings, profile, addInvoice } = useApp();
+  const { customers, settings, profile, addInvoice } = useApp();
   const toast = useToast();
   const navigate = useNavigate();
   const { openModal } = useModal();
   const [searchParams] = useSearchParams();
 
-  const prefix = settings.invoicePrefix || profile.invoicePrefix || 'SGT';
+  const prefix = settings.invoicePrefix || profile.invoicePrefix || 'INV';
   const initialFormat = searchParams.get('format') || 'classic';
 
   const [form, setForm] = useState({
-    invoiceNumber: nextInvoiceNumber(invoices, prefix),
+    invoiceNumber: '',
     date: new Date().toISOString().split('T')[0],
     dueDate: '',
     customerId: '',
@@ -37,6 +38,25 @@ export default function CreateInvoice() {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchNextInvoiceNumber()
+      .then((res) => {
+        if (!cancelled && res?.invoiceNumber) {
+          setForm((f) => ({ ...f, invoiceNumber: res.invoiceNumber }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setForm((f) => ({
+            ...f,
+            invoiceNumber: `${prefix}-${new Date().getFullYear()}-XXXX`,
+          }));
+        }
+      });
+    return () => { cancelled = true; };
+  }, [prefix]);
 
   const totals = useMemo(
     () => calcInvoiceTotals(form.items, form.discount, form.taxRate),
@@ -68,26 +88,30 @@ export default function CreateInvoice() {
     if (Object.keys(errs).length) return;
 
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    const invoice = addInvoice({
-      ...form,
-      items: form.items
-        .filter((i) => i.description)
-        .map((i, idx) => ({
-          id: idx + 1,
-          description: i.description,
-          hsn: i.hsn,
-          quantity: Number(i.quantity) || 1,
-          rate: Number(i.rate) || 0,
-          amount: Number(i.amount) || 0,
-        })),
-      discount: Number(form.discount) || 0,
-      taxRate: Number(form.taxRate) || 0,
-      paidAmount: Number(form.paidAmount) || 0,
-    });
-    setLoading(false);
-    toast.success('Invoice created successfully');
-    navigate(`/invoices/${invoice.id}`);
+    try {
+      const invoice = await addInvoice({
+        ...form,
+        items: form.items
+          .filter((i) => i.description)
+          .map((i, idx) => ({
+            id: idx + 1,
+            description: i.description,
+            hsn: i.hsn,
+            quantity: Number(i.quantity) || 1,
+            rate: Number(i.rate) || 0,
+            amount: Number(i.amount) || 0,
+          })),
+        discount: Number(form.discount) || 0,
+        taxRate: Number(form.taxRate) || 0,
+        paidAmount: Number(form.paidAmount) || 0,
+      });
+      toast.success('Invoice created successfully');
+      navigate(`/invoices/${invoice.id}`);
+    } catch (err) {
+      toast.error(err.message || 'Failed to create invoice');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

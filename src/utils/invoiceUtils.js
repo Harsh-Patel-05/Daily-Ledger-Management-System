@@ -1,0 +1,205 @@
+/** Parse OCR / plain text from Indian-style invoices into structured fields */
+export function parseInvoiceText(text = '') {
+  const raw = text.replace(/\r/g, '\n');
+  const lines = raw
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  const gstMatch = raw.match(/\b\d{2}[A-Z]{5}\d{4}[A-Z]\d[Z][A-Z\d]\b/i);
+  const phoneMatch = raw.match(/(?:\+91[\s-]?)?[6-9]\d{9}\b/);
+  const invoiceNoMatch =
+    raw.match(/(?:invoice|inv|bill)\s*(?:no|number|#|num)?[:\s.-]*([A-Z0-9\-\/]+)/i) ||
+    raw.match(/\b([A-Z]{2,5}[-/]?\d{4}[-/]?\d{3,6})\b/);
+  const dateMatch =
+    raw.match(/(?:date|dated)[:\s]*(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/i) ||
+    raw.match(/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/);
+  const emailMatch = raw.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+
+  const amountPatterns = [
+    /(?:grand\s*total|total\s*amount|net\s*amount|amount\s*payable|total)[:\s]*[₹Rs.\s]*([\d,]+\.?\d*)/gi,
+    /[₹]\s*([\d,]+\.?\d*)/g,
+  ];
+  let total = null;
+  for (const pattern of amountPatterns) {
+    const matches = [...raw.matchAll(pattern)];
+    if (matches.length) {
+      const nums = matches.map((m) => parseFloat(String(m[1]).replace(/,/g, ''))).filter((n) => !isNaN(n) && n > 0);
+      if (nums.length) {
+        total = Math.max(...nums);
+        break;
+      }
+    }
+  }
+
+  const subtotalMatch = raw.match(/(?:sub\s*total|taxable\s*amount)[:\s]*[₹Rs.\s]*([\d,]+\.?\d*)/i);
+  const taxMatch = raw.match(/(?:gst|cgst|sgst|igst|tax)\s*(?:\d+\s*%?)?[:\s]*[₹Rs.\s]*([\d,]+\.?\d*)/i);
+  const discountMatch = raw.match(/(?:discount)[:\s]*[₹Rs.\s]*([\d,]+\.?\d*)/i);
+
+  // Try to extract line items (qty x rate style)
+  const items = [];
+  const itemRegex =
+    /^(.{3,40}?)\s+(\d+(?:\.\d+)?)\s+(?:x|X|×|\*)?\s*[₹Rs.]?\s*([\d,]+\.?\d*)\s+[₹Rs.]?\s*([\d,]+\.?\d*)$/;
+  const itemRegex2 =
+    /^(.{3,40}?)\s+(\d+)\s+([\d,]+\.?\d*)\s+([\d,]+\.?\d*)$/;
+
+  lines.forEach((line, idx) => {
+    if (/total|gst|subtotal|discount|invoice|bill to|ship/i.test(line)) return;
+    let m = line.match(itemRegex) || line.match(itemRegex2);
+    if (m) {
+      items.push({
+        id: items.length + 1,
+        description: m[1].trim(),
+        hsn: '',
+        quantity: Number(m[2]),
+        rate: parseFloat(String(m[3]).replace(/,/g, '')),
+        amount: parseFloat(String(m[4]).replace(/,/g, '')),
+      });
+    } else if (
+      idx > 2 &&
+      line.length > 5 &&
+      line.length < 50 &&
+      !/\d{10}/.test(line) &&
+      !/gstin|address|phone|email/i.test(line) &&
+      items.length < 8 &&
+      /[a-zA-Z]{3,}/.test(line) &&
+      /\d/.test(line)
+    ) {
+      const nums = line.match(/[\d,]+\.?\d*/g)?.map((n) => parseFloat(n.replace(/,/g, ''))) || [];
+      const desc = line.replace(/[\d,₹Rs.]+/g, ' ').replace(/\s+/g, ' ').trim();
+      if (desc.length >= 3 && nums.length >= 1) {
+        const qty = nums.length >= 2 ? nums[0] : 1;
+        const rate = nums.length >= 2 ? nums[1] : nums[0];
+        const amount = nums.length >= 3 ? nums[2] : qty * rate;
+        if (amount > 0 && desc.length < 45) {
+          items.push({
+            id: items.length + 1,
+            description: desc,
+            hsn: '',
+            quantity: qty,
+            rate,
+            amount,
+          });
+        }
+      }
+    }
+  });
+
+  // Customer name heuristics
+  let customerName = '';
+  let businessName = '';
+  const billToIdx = lines.findIndex((l) => /bill\s*to|buyer|customer|party/i.test(l));
+  if (billToIdx >= 0 && lines[billToIdx + 1]) {
+    customerName = lines[billToIdx + 1].replace(/[:\-]/g, '').trim();
+    if (lines[billToIdx + 2] && !/\d{6,}/.test(lines[billToIdx + 2])) {
+      businessName = lines[billToIdx + 2];
+    }
+  }
+
+  const addressLines = [];
+  if (billToIdx >= 0) {
+    for (let i = billToIdx + 1; i < Math.min(billToIdx + 6, lines.length); i++) {
+      if (/gst|phone|mobile|email|total/i.test(lines[i])) break;
+      if (lines[i] !== customerName && lines[i] !== businessName) addressLines.push(lines[i]);
+    }
+  }
+
+  return {
+    invoiceNumber: invoiceNoMatch?.[1] || '',
+    date: normalizeDate(dateMatch?.[1]),
+    customerName: customerName || '',
+    businessName: businessName || '',
+    customerGst: gstMatch?.[0]?.toUpperCase() || '',
+    customerMobile: phoneMatch?.[0]?.replace(/\D/g, '').slice(-10) || '',
+    customerEmail: emailMatch?.[0] || '',
+    customerAddress: addressLines.join(', ').slice(0, 120),
+    items: items.length
+      ? items.slice(0, 10)
+      : total
+        ? [{ id: 1, description: 'Goods / Services (from invoice)', hsn: '', quantity: 1, rate: total, amount: total }]
+        : [],
+    subtotal: subtotalMatch ? parseFloat(String(subtotalMatch[1]).replace(/,/g, '')) : total || 0,
+    discount: discountMatch ? parseFloat(String(discountMatch[1]).replace(/,/g, '')) : 0,
+    taxAmount: taxMatch ? parseFloat(String(taxMatch[1]).replace(/,/g, '')) : 0,
+    taxRate: 18,
+    total: total || 0,
+    notes: 'Imported from uploaded invoice',
+    confidence: calcConfidence({ gstMatch, phoneMatch, invoiceNoMatch, dateMatch, total, items }),
+    rawText: raw.slice(0, 3000),
+  };
+}
+
+function normalizeDate(str) {
+  if (!str) return new Date().toISOString().split('T')[0];
+  const parts = str.split(/[\/\-.]/);
+  if (parts.length !== 3) return new Date().toISOString().split('T')[0];
+  let [d, m, y] = parts.map(Number);
+  if (y < 100) y += 2000;
+  if (d > 31) [d, y] = [y, d];
+  const mm = String(m).padStart(2, '0');
+  const dd = String(d).padStart(2, '0');
+  return `${y}-${mm}-${dd}`;
+}
+
+function calcConfidence({ gstMatch, phoneMatch, invoiceNoMatch, dateMatch, total, items }) {
+  let score = 0;
+  if (gstMatch) score += 20;
+  if (phoneMatch) score += 15;
+  if (invoiceNoMatch) score += 20;
+  if (dateMatch) score += 15;
+  if (total) score += 20;
+  if (items?.length) score += 10;
+  return Math.min(score, 100);
+}
+
+export function numberToWords(num) {
+  if (!num && num !== 0) return '';
+  const a = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+    'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen',
+  ];
+  const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+  const n = Math.floor(Math.abs(num));
+  if (n === 0) return 'Zero Rupees Only';
+
+  const two = (x) => {
+    if (x < 20) return a[x];
+    return `${b[Math.floor(x / 10)]} ${a[x % 10]}`.trim();
+  };
+  const three = (x) => {
+    if (x < 100) return two(x);
+    return `${a[Math.floor(x / 100)]} Hundred ${two(x % 100)}`.trim();
+  };
+
+  let str = '';
+  const crore = Math.floor(n / 10000000);
+  const lakh = Math.floor((n % 10000000) / 100000);
+  const thousand = Math.floor((n % 100000) / 1000);
+  const rem = n % 1000;
+
+  if (crore) str += `${three(crore)} Crore `;
+  if (lakh) str += `${three(lakh)} Lakh `;
+  if (thousand) str += `${two(thousand)} Thousand `;
+  if (rem) str += `${three(rem)} `;
+  return `${str.trim()} Rupees Only`;
+}
+
+export function calcInvoiceTotals(items = [], discount = 0, taxRate = 18) {
+  const subtotal = items.reduce((s, i) => s + (Number(i.amount) || Number(i.quantity) * Number(i.rate) || 0), 0);
+  const afterDiscount = Math.max(0, subtotal - Number(discount || 0));
+  const taxAmount = Math.round((afterDiscount * Number(taxRate || 0)) / 100);
+  const total = afterDiscount + taxAmount;
+  return { subtotal, discount: Number(discount || 0), taxRate: Number(taxRate || 0), taxAmount, total };
+}
+
+export function nextInvoiceNumber(invoices = [], prefix = 'SGT') {
+  const year = new Date().getFullYear();
+  const pattern = new RegExp(`^${prefix}-${year}-(\\d+)$`);
+  let max = 0;
+  invoices.forEach((inv) => {
+    const m = inv.invoiceNumber?.match(pattern);
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return `${prefix}-${year}-${String(max + 1).padStart(4, '0')}`;
+}

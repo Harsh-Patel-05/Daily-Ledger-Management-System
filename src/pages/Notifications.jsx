@@ -1,8 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaBell, FaCheckDouble, FaExclamationTriangle, FaClock, FaFileInvoiceDollar, FaCalendarCheck } from 'react-icons/fa';
+import {
+  FaBell, FaCheckDouble, FaExclamationTriangle, FaClock,
+  FaFileInvoiceDollar, FaCalendarCheck, FaWhatsapp, FaPaperPlane,
+} from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { useApp } from '../context/AppContext';
+import { useModal } from '../context/ModalContext';
+import { useToast } from '../context/ToastContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { Breadcrumbs, Card, Button, Badge, EmptyState, Filter } from '../components/ui';
 
@@ -14,12 +19,43 @@ const typeConfig = {
 };
 
 export default function Notifications() {
-  const { notifications, markNotificationRead, markAllNotificationsRead, unreadCount } = useApp();
+  const {
+    notifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    unreadCount,
+    syncAndRefreshNotifications,
+  } = useApp();
+  const { openModal } = useModal();
+  const toast = useToast();
   const [filter, setFilter] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
   const filtered = filter
     ? notifications.filter((n) => n.type === filter)
     : notifications;
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await syncAndRefreshNotifications();
+      toast.info('In-app list updated. WhatsApp / SMS / Email ke liye “Send to customer” use karo.');
+    } catch (err) {
+      toast.error(err.message || 'Refresh failed');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleSendToCustomer = (e, n) => {
+    e.stopPropagation();
+    if (!n.customerId) {
+      toast.error('Is alert pe customer linked nahi hai');
+      return;
+    }
+    markNotificationRead(n.id).catch(() => {});
+    openModal('sendReminder', { customerId: n.customerId });
+  };
 
   return (
     <div className="space-y-4">
@@ -29,14 +65,28 @@ export default function Notifications() {
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Notifications</h1>
           <p className="text-sm text-muted mt-0.5">
             {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+            {' · '}
+            Yeh aapke liye in-app alerts hain
           </p>
         </div>
-        {unreadCount > 0 && (
-          <Button variant="outline" size="sm" onClick={markAllNotificationsRead}>
-            <FaCheckDouble size={12} /> Mark all read
+        <div className="flex flex-wrap gap-2">
+          <Button variant="soft" size="sm" loading={refreshing} onClick={handleRefresh}>
+            Refresh list
           </Button>
-        )}
+          {unreadCount > 0 && (
+            <Button variant="outline" size="sm" onClick={() => markAllNotificationsRead()}>
+              <FaCheckDouble size={12} /> Mark all read
+            </Button>
+          )}
+        </div>
       </div>
+
+      <Card className="!py-3 !px-4 bg-blue-50/60 dark:bg-blue-900/20 border-blue-100 dark:border-blue-800">
+        <p className="text-sm text-slate-700 dark:text-slate-200">
+          <strong>Refresh</strong> sirf yahan ki list update karta hai — WhatsApp / SMS / Email automatically nahi jaate.
+          Customer ko message bhejne ke liye alert pe <strong>Send to customer</strong> dabao, phir channel choose karke <strong>Open & Send</strong>.
+        </p>
+      </Card>
 
       <Card>
         <div className="mb-5">
@@ -78,7 +128,7 @@ export default function Notifications() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <p className={`text-sm ${n.read ? 'font-medium' : 'font-semibold'} text-slate-800 dark:text-slate-100`}>
                             {n.title}
@@ -91,7 +141,7 @@ export default function Notifications() {
                         {cfg.label}
                       </Badge>
                     </div>
-                    <div className="flex items-center gap-3 mt-2">
+                    <div className="flex flex-wrap items-center gap-3 mt-2">
                       <span className="text-xs text-muted flex items-center gap-1">
                         <FaClock size={10} />
                         {formatDate(n.createdAt)}
@@ -100,13 +150,24 @@ export default function Notifications() {
                         <span className="text-xs font-semibold text-amber-600">{formatCurrency(n.amount)}</span>
                       )}
                       {n.customerId && (
-                        <Link
-                          to={`/customers/${n.customerId}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-xs text-primary hover:underline"
-                        >
-                          View customer
-                        </Link>
+                        <>
+                          <Link
+                            to={`/customers/${n.customerId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            View customer
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={(e) => handleSendToCustomer(e, n)}
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 px-2.5 py-1 rounded-lg"
+                          >
+                            <FaWhatsapp size={12} />
+                            <FaPaperPlane size={10} />
+                            Send to customer
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

@@ -180,8 +180,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             for i in instance.items.all()
         ]
         return {
-            'id': f'inv_{instance.pk}',
-            'pk': instance.pk,
+            'id': instance.pk,
             'invoiceNumber': instance.invoice_number,
             'date': instance.date.isoformat() if instance.date else None,
             'dueDate': instance.due_date.isoformat() if instance.due_date else None,

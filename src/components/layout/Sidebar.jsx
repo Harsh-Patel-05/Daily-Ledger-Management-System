@@ -31,8 +31,13 @@ const menuItems = [
 ];
 
 export default function Sidebar() {
-  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, unreadCount } = useApp();
+  const { sidebarOpen, setSidebarOpen, sidebarCollapsed, unreadCount, profile } = useApp();
   const location = useLocation();
+
+  const shopLabel = profile?.shopName || profile?.businessName || 'Your Shop';
+  const locationLabel = profile?.address
+    ? profile.address.split(',').slice(-2).join(',').trim() || profile.address
+    : 'Update profile details';
 
   const SidebarContent = ({ collapsed = false }) => (
     <div className="flex flex-col h-full">
@@ -85,8 +90,8 @@ export default function Sidebar() {
       {!collapsed && (
         <div className="px-4 py-4 border-t border-border/60 dark:border-slate-700">
           <div className="bg-gradient-to-br from-primary/5 to-secondary/5 dark:from-primary/10 dark:to-secondary/10 rounded-xl p-3">
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200">Shree Ganesh Traders</p>
-            <p className="text-[10px] text-muted mt-0.5">Indore, Madhya Pradesh</p>
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{shopLabel}</p>
+            <p className="text-[10px] text-muted mt-0.5 truncate">{locationLabel}</p>
           </div>
         </div>
       )}

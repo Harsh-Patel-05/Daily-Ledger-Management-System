@@ -56,4 +56,9 @@ class Customer(models.Model):
         self.current_balance = max(0, credit - reductions)
         last = Transaction.objects.filter(customer=self).order_by('-date', '-created_at').first()
         self.last_transaction = last.date if last else None
-        self.save(update_fields=['current_balance', 'last_transaction', 'updated_at'])
+        if self.status != self.Status.INACTIVE:
+            if self.credit_limit and self.current_balance > self.credit_limit:
+                self.status = self.Status.OVERDUE
+            elif self.current_balance == 0:
+                self.status = self.Status.ACTIVE
+        self.save(update_fields=['current_balance', 'last_transaction', 'status', 'updated_at'])

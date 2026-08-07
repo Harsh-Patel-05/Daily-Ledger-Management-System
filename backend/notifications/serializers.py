@@ -13,8 +13,7 @@ class NotificationSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         return {
-            'id': f'notif_{instance.pk}',
-            'pk': instance.pk,
+            'id': instance.pk,
             'type': instance.type,
             'title': instance.title,
             'message': instance.message,
@@ -22,6 +21,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             'customerName': instance.customer.name if instance.customer else None,
             'amount': float(instance.amount) if instance.amount is not None else None,
             'isRead': instance.is_read,
+            'read': instance.is_read,
             'createdAt': instance.created_at.isoformat() if instance.created_at else None,
         }
 

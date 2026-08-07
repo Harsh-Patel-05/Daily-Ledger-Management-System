@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ subject }}</title>
+</head>
+<body style="margin:0;padding:0;background:#F1F5F9;font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#0F172A;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#F1F5F9;padding:24px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#FFFFFF;border-radius:16px;overflow:hidden;border:1px solid #E2E8F0;">
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#2563EB,#1E40AF);padding:28px 28px 24px;">
+              <p style="margin:0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:rgba(255,255,255,0.75);font-weight:600;">
+                Daily Ledger
+              </p>
+              <h1 style="margin:8px 0 0;font-size:22px;line-height:1.3;color:#FFFFFF;font-weight:700;">
+                {{ heading }}
+              </h1>
+              <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">
+                {{ shop_name }} · {{ date_label }}
+              </p>
+            </td>
+          </tr>
+
+          <!-- Intro -->
+          <tr>
+            <td style="padding:24px 28px 8px;">
+              <p style="margin:0;font-size:15px;line-height:1.55;color:#334155;">
+                Namaste{% if owner_name %} {{ owner_name }}{% endif %},
+              </p>
+              <p style="margin:10px 0 0;font-size:15px;line-height:1.55;color:#64748B;">
+                Aapke shop ke liye <strong style="color:#0F172A;">{{ count }}</strong> naya alert{{ count|pluralize }} ready hai.
+                Neeche summary dekho — full details app ke Notifications page pe milengi.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Alert cards -->
+          <tr>
+            <td style="padding:12px 20px 8px;">
+              {% for item in items %}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 12px;border:1px solid {{ item.border }};border-radius:12px;background:{{ item.bg }};">
+                <tr>
+                  <td style="padding:14px 16px;">
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <span style="display:inline-block;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:0.02em;color:{{ item.badge_color }};background:{{ item.badge_bg }};">
+                            {{ item.label }}
+                          </span>
+                        </td>
+                        {% if item.amount %}
+                        <td align="right" style="font-size:14px;font-weight:700;color:#B45309;">
+                          {{ item.amount }}
+                        </td>
+                        {% endif %}
+                      </tr>
+                    </table>
+                    <p style="margin:10px 0 0;font-size:15px;font-weight:700;color:#0F172A;line-height:1.35;">
+                      {{ item.title }}
+                    </p>
+                    {% if item.message %}
+                    <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:#475569;">
+                      {{ item.message }}
+                    </p>
+                    {% endif %}
+                    {% if item.customer_name %}
+                    <p style="margin:8px 0 0;font-size:12px;color:#64748B;">
+                      Customer: <strong style="color:#334155;">{{ item.customer_name }}</strong>
+                    </p>
+                    {% endif %}
+                  </td>
+                </tr>
+              </table>
+              {% endfor %}
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td style="padding:8px 28px 28px;" align="center">
+              {% if app_url %}
+              <a href="{{ app_url }}" style="display:inline-block;padding:12px 22px;border-radius:10px;background:#2563EB;color:#FFFFFF;font-size:14px;font-weight:700;text-decoration:none;">
+                Open Notifications
+              </a>
+              {% else %}
+              <p style="margin:0;font-size:13px;color:#64748B;">
+                App kholo → <strong>Notifications</strong>
+              </p>
+              {% endif %}
+              <p style="margin:14px 0 0;font-size:12px;line-height:1.5;color:#94A3B8;">
+                Yeh alert sirf aap (shop owner) ke liye hai. Customer ko WhatsApp / SMS / Email
+                sirf app se <em>Send to customer</em> ke through manually jaata hai.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding:16px 28px;background:#F8FAFC;border-top:1px solid #E2E8F0;">
+              <p style="margin:0;font-size:11px;color:#94A3B8;line-height:1.5;text-align:center;">
+                © {{ year }} Daily Ledger Management System<br />
+                Settings → My alerts se Email / SMS band kar sakte ho.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

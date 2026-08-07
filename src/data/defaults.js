@@ -1,0 +1,43 @@
+/** Neutral empty defaults — real values load from the API after login. */
+export const emptyProfile = {
+  shopName: '',
+  ownerName: '',
+  email: '',
+  mobile: '',
+  address: '',
+  gst: '',
+  invoicePrefix: 'INV',
+  currency: 'INR',
+  language: 'en',
+  logo: null,
+  joinedAt: null,
+  bankName: '',
+  bankAccount: '',
+  bankIFSC: '',
+  bankBranch: '',
+  upiId: '',
+};
+
+export const emptySettings = {
+  businessName: '',
+  gstNumber: '',
+  invoicePrefix: 'INV',
+  currency: 'INR',
+  language: 'English',
+  theme: 'light',
+  fiscalYearStart: '04',
+  defaultTaxRate: 18,
+  defaultPaymentTerms: 15,
+  lowStockAlert: false,
+  autoBackup: true,
+  compactTables: false,
+  showAmountInWords: true,
+  notifications: {
+    paymentReminders: true,
+    overdueAlerts: true,
+    dailySummary: true,
+    emailNotifications: false,
+    smsNotifications: true,
+    invoiceAlerts: true,
+  },
+};

@@ -5,6 +5,7 @@ from django_filters import rest_framework as filters
 from .models import Invoice
 from .serializers import InvoiceSerializer
 from notifications.models import ActivityLog
+from notifications.services import notify_invoice_created
 
 
 class InvoiceFilter(filters.FilterSet):
@@ -50,6 +51,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             type='invoice',
             message=f'Invoice created: {invoice.invoice_number}',
         )
+        notify_invoice_created(self.request.user, invoice)
 
     def perform_destroy(self, instance):
         customer = instance.customer

@@ -7,13 +7,14 @@ import {
   useEffect,
 } from 'react';
 import { useAuth } from './AuthContext';
-import { businessProfile, defaultSettings } from '../data/settings';
+import { emptyProfile, emptySettings } from '../data/defaults';
 import * as customersApi from '../api/customers';
 import * as transactionsApi from '../api/transactions';
 import * as invoicesApi from '../api/invoices';
 import * as notificationsApi from '../api/notifications';
 import * as authApi from '../api/auth';
 import * as coreApi from '../api/core';
+import { sameId } from '../api/ids';
 
 const AppContext = createContext(null);
 
@@ -24,8 +25,8 @@ export function AppProvider({ children }) {
   const [transactions, setTransactions] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [invoices, setInvoices] = useState([]);
-  const [settings, setSettingsState] = useState(defaultSettings);
-  const [profile, setProfileState] = useState(businessProfile);
+  const [settings, setSettingsState] = useState(emptySettings);
+  const [profile, setProfileState] = useState(emptyProfile);
   const [activityLog, setActivityLog] = useState([]);
   const [dashboardExtra, setDashboardExtra] = useState(null);
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -44,8 +45,8 @@ export function AppProvider({ children }) {
     setTransactions([]);
     setNotifications([]);
     setInvoices([]);
-    setSettingsState(defaultSettings);
-    setProfileState(businessProfile);
+    setSettingsState(emptySettings);
+    setProfileState(emptyProfile);
     setActivityLog([]);
     setDashboardExtra(null);
     setAnalyticsData(null);
@@ -88,8 +89,14 @@ export function AppProvider({ children }) {
       setInvoices(invs);
       setNotifications(notifs);
       setActivityLog(activity);
-      setProfileState({ ...businessProfile, ...prof });
-      setSettingsState({ ...defaultSettings, ...sett });
+      setProfileState({ ...emptyProfile, ...prof });
+      setSettingsState({
+        ...emptySettings,
+        ...sett,
+        gstNumber: sett.gstNumber || prof.gst || '',
+        businessName: sett.businessName || prof.shopName || '',
+        invoicePrefix: sett.invoicePrefix || prof.invoicePrefix || emptySettings.invoicePrefix,
+      });
       setDashboardExtra(dash);
       setAnalyticsData(analytics);
       setReportsData(reports);
@@ -139,20 +146,20 @@ export function AppProvider({ children }) {
 
   const updateCustomer = useCallback(async (id, data) => {
     const updated = await customersApi.updateCustomer(id, data);
-    setCustomers((prev) => prev.map((c) => (c.id === id || c.pk === updated.pk ? updated : c)));
+    setCustomers((prev) => prev.map((c) => (sameId(c.id, id) ? updated : c)));
     logActivity('Customer updated', 'customer');
     return updated;
   }, [logActivity]);
 
   const deleteCustomer = useCallback(async (id) => {
-    const c = customers.find((x) => x.id === id);
+    const c = customers.find((x) => sameId(x.id, id));
     await customersApi.deleteCustomer(id);
-    setCustomers((prev) => prev.filter((x) => x.id !== id));
+    setCustomers((prev) => prev.filter((x) => !sameId(x.id, id)));
     if (c) logActivity(`Customer deleted: ${c.name}`, 'customer');
   }, [customers, logActivity]);
 
   const getCustomer = useCallback(
-    (id) => customers.find((c) => c.id === id || String(c.pk) === String(id)),
+    (id) => customers.find((c) => sameId(c.id, id)),
     [customers]
   );
 
@@ -165,7 +172,7 @@ export function AppProvider({ children }) {
   }, [refreshCustomers, logActivity]);
 
   const getCustomerTransactions = useCallback(
-    (customerId) => transactions.filter((t) => t.customerId === customerId),
+    (customerId) => transactions.filter((t) => sameId(t.customerId, customerId)),
     [transactions]
   );
 
@@ -197,13 +204,13 @@ export function AppProvider({ children }) {
 
   const updateInvoice = useCallback(async (id, data) => {
     const updated = await invoicesApi.updateInvoice(id, data);
-    setInvoices((prev) => prev.map((inv) => (inv.id === id ? updated : inv)));
+    setInvoices((prev) => prev.map((inv) => (sameId(inv.id, id) ? updated : inv)));
     return updated;
   }, []);
 
   const deleteInvoice = useCallback(async (id) => {
     await invoicesApi.deleteInvoice(id);
-    setInvoices((prev) => prev.filter((i) => i.id !== id));
+    setInvoices((prev) => prev.filter((i) => !sameId(i.id, id)));
     await refreshCustomers();
     logActivity('Invoice deleted', 'invoice');
   }, [refreshCustomers, logActivity]);
@@ -216,7 +223,7 @@ export function AppProvider({ children }) {
   }, [logActivity]);
 
   const getInvoice = useCallback(
-    (id) => invoices.find((i) => i.id === id || String(i.pk) === String(id)),
+    (id) => invoices.find((i) => sameId(i.id, id)),
     [invoices]
   );
 
@@ -231,7 +238,7 @@ export function AppProvider({ children }) {
     if (!customer && invoiceData.customerName) {
       customer = await addCustomer({
         name: invoiceData.customerName,
-        mobile: invoiceData.customerMobile || '9000000000',
+        mobile: invoiceData.customerMobile || '0000000000',
         businessName: invoiceData.businessName || invoiceData.customerBusiness || invoiceData.customerName,
         address: invoiceData.customerAddress || '',
         gst: invoiceData.customerGst || '',
@@ -292,6 +299,12 @@ export function AppProvider({ children }) {
       }
       const saved = await authApi.updateProfile(payload);
       setProfileState((prev) => ({ ...prev, ...saved }));
+      setSettingsState((prev) => ({
+        ...prev,
+        gstNumber: saved.gst ?? prev.gstNumber,
+        businessName: saved.shopName || prev.businessName,
+        invoicePrefix: saved.invoicePrefix || prev.invoicePrefix,
+      }));
       return saved;
     } catch (err) {
       setProfileState(profile);
@@ -309,14 +322,33 @@ export function AppProvider({ children }) {
     throw new Error('Backup restore is local-only. Use API seed or re-enter data.');
   }, []);
 
-  const resetDemoData = useCallback(async () => {
+  const refreshFromServer = useCallback(async () => {
     await refreshAll();
     logActivity('Data refreshed from server', 'system');
   }, [refreshAll, logActivity]);
 
+  const refreshNotifications = useCallback(async () => {
+    const [notifs, activity] = await Promise.all([
+      notificationsApi.listNotifications(),
+      notificationsApi.listActivity(),
+    ]);
+    setNotifications(notifs);
+    setActivityLog(activity);
+    return notifs;
+  }, []);
+
+  const syncAndRefreshNotifications = useCallback(async () => {
+    try {
+      await notificationsApi.syncNotifications();
+    } catch {
+      // sync may fail if backend old; still refresh list
+    }
+    return refreshNotifications();
+  }, [refreshNotifications]);
+
   const markNotificationRead = useCallback(async (id) => {
     const updated = await notificationsApi.markNotificationRead(id);
-    setNotifications((prev) => prev.map((n) => (n.id === id ? updated : n)));
+    setNotifications((prev) => prev.map((n) => (sameId(n.id, id) ? { ...updated, read: true } : n)));
   }, []);
 
   const markAllNotificationsRead = useCallback(async () => {
@@ -399,11 +431,14 @@ export function AppProvider({ children }) {
     getInvoice,
     importInvoiceAsTransaction,
     restoreBackup,
-    resetDemoData,
+    refreshFromServer,
+    resetDemoData: refreshFromServer,
     refreshAll,
     logActivity,
     markNotificationRead,
     markAllNotificationsRead,
+    refreshNotifications,
+    syncAndRefreshNotifications,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

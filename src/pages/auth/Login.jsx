@@ -7,8 +7,8 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 
 export default function Login() {
-  const [email, setEmail] = useState('mukesh@ganeshtraders.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -87,8 +87,11 @@ export default function Login() {
         </Button>
       </form>
 
-      <p className="text-center text-xs text-muted mt-6">
-        Demo credentials are pre-filled. Just click Sign In.
+      <p className="text-center text-sm text-muted mt-6">
+        Don&apos;t have an account?{' '}
+        <Link to="/signup" className="text-primary hover:underline font-medium">
+          Sign up
+        </Link>
       </p>
     </div>
   );

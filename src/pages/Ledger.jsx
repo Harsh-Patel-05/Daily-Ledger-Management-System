@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { TRANSACTION_TYPES } from '../utils/helpers';
+import { exportToCsv } from '../utils/exportCsv';
 import {
   Breadcrumbs, Card, CardHeader, Dropdown, DatePicker, Button, Badge, EmptyState,
 } from '../components/ui';
@@ -65,7 +66,22 @@ export default function Ledger() {
   };
 
   const handleExport = () => {
-    toast.success('Ledger exported successfully (demo)');
+    if (!customer || !ledgerEntries?.entries?.length) {
+      toast.error('Nothing to export');
+      return;
+    }
+    const rows = ledgerEntries.entries.map((e) => ({
+      Date: e.date,
+      Type: e.type,
+      Description: e.itemDescription || e.description || '',
+      Credit: e.credit,
+      Debit: e.debit,
+      Balance: e.runningBalance,
+      Method: e.paymentMethod || '',
+      Notes: e.notes || '',
+    }));
+    exportToCsv(rows, `ledger-${customer.name.replace(/\s+/g, '-').toLowerCase()}.csv`);
+    toast.success('Ledger exported as CSV');
   };
 
   const typeColor = (type) => {

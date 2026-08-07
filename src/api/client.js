@@ -146,7 +146,7 @@ async function request(path, options = {}, retry = true) {
     });
   } catch {
     throw new ApiError(
-      'Cannot reach API. Ensure Django is running on port 8001 and restart Vite (npm run dev).',
+      'Cannot reach API. Ensure Django is running on port 8000 and restart Vite (npm run dev).',
       0
     );
   }

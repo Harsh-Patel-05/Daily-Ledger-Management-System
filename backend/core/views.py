@@ -46,7 +46,7 @@ class DashboardView(APIView):
         recent_txs = txs.select_related('customer').order_by('-date', '-created_at')[:8]
         recent = [
             {
-                'id': f'txn_{t.pk}',
+                'id': t.pk,
                 'date': t.date.isoformat(),
                 'customerName': t.customer_name,
                 'type': t.type,
@@ -59,7 +59,7 @@ class DashboardView(APIView):
         top_debtors = customers.filter(current_balance__gt=0).order_by('-current_balance')[:5]
         debtors = [
             {
-                'id': f'cust_{c.pk}',
+                'id': c.pk,
                 'name': c.name,
                 'businessName': c.business_name,
                 'currentBalance': float(c.current_balance),
@@ -113,7 +113,7 @@ class LedgerView(APIView):
             customers = Customer.objects.filter(owner=user).order_by('name')
             data = [
                 {
-                    'id': f'cust_{c.pk}',
+                    'id': c.pk,
                     'name': c.name,
                     'businessName': c.business_name,
                     'mobile': c.mobile,
@@ -149,7 +149,7 @@ class LedgerView(APIView):
                 credit = t.amount
                 running -= t.amount
             entries.append({
-                'id': f'txn_{t.pk}',
+                'id': t.pk,
                 'date': t.date.isoformat(),
                 'type': t.type,
                 'description': t.item_description,
@@ -162,7 +162,7 @@ class LedgerView(APIView):
 
         return Response({
             'customer': {
-                'id': f'cust_{customer.pk}',
+                'id': customer.pk,
                 'name': customer.name,
                 'businessName': customer.business_name,
                 'mobile': customer.mobile,
@@ -242,7 +242,7 @@ class ReportsView(APIView):
             .order_by('-total')[:10]
         )
         for row in top_customers:
-            row['customerId'] = f"cust_{row.pop('customer_id')}"
+            row['customerId'] = row.pop('customer_id')
             row['name'] = row.pop('customer__name')
             row['total'] = float(row['total'] or 0)
 
@@ -312,10 +312,28 @@ class AnalyticsView(APIView):
         for row in type_dist:
             row['total'] = float(row['total'] or 0)
 
+        # Aggregate invoice line items for top products
+        from invoices.models import InvoiceItem
+        product_rows = (
+            InvoiceItem.objects.filter(invoice__owner=user, invoice__date__gte=start)
+            .values('description')
+            .annotate(sold=Sum('quantity'), revenue=Sum('amount'))
+            .order_by('-revenue')[:8]
+        )
+        top_products = [
+            {
+                'name': row['description'] or 'Item',
+                'sold': float(row['sold'] or 0),
+                'revenue': float(row['revenue'] or 0),
+            }
+            for row in product_rows
+        ]
+
         return Response({
             'monthlyTrend': monthly,
             'customerStatus': status_dist,
             'topCustomers': top_by_balance,
+            'topProducts': top_products,
             'transactionTypes': type_dist,
             'totals': {
                 'customers': customers.count(),

@@ -3,6 +3,7 @@ import { FaSave, FaDownload, FaUpload, FaUndo } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { testOwnerAlert } from '../api/notifications';
 import { exportBackupJson } from '../utils/storage';
 import { Breadcrumbs, Card, CardHeader, Input, Dropdown, Button, ConfirmationDialog } from '../components/ui';
 
@@ -10,7 +11,7 @@ export default function Settings() {
   const {
     settings, setSettings, profile, setProfile,
     customers, transactions, invoices, notifications, activityLog,
-    resetDemoData,
+    refreshFromServer,
   } = useApp();
   const { setDarkMode } = useTheme();
   const toast = useToast();
@@ -23,12 +24,19 @@ export default function Settings() {
     upiId: profile.upiId || '',
   });
   const [loading, setLoading] = useState(false);
+  const [testingAlert, setTestingAlert] = useState(false);
   const [showReset, setShowReset] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
-    setForm((f) => ({ ...f, ...settings }));
-  }, [settings]);
+    setForm((f) => ({
+      ...f,
+      ...settings,
+      gstNumber: settings.gstNumber || profile.gst || '',
+      businessName: settings.businessName || profile.shopName || '',
+      invoicePrefix: settings.invoicePrefix || profile.invoicePrefix || 'INV',
+    }));
+  }, [settings, profile]);
 
   useEffect(() => {
     setBank({
@@ -167,15 +175,23 @@ export default function Settings() {
       </Card>
 
       <Card>
-        <CardHeader title="Notification Settings" subtitle="Choose what alerts you receive" />
+        <CardHeader
+          title="My alerts (shop owner)"
+          subtitle="In-app + automatic Email/SMS to YOU — customers are never auto-messaged"
+        />
+        <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 text-sm text-slate-700 dark:text-slate-200">
+          <strong>Email / SMS</strong> neeche ON karo to naye alerts aapke account email/mobile pe jayenge
+          (abhi: {profile?.email || 'no email'} / {profile?.mobile || 'no mobile'}).
+          Customer ko WhatsApp/SMS/Email sirf <strong>Send to customer</strong> se manually.
+        </div>
         <div className="space-y-4">
           {[
-            { key: 'paymentReminders', label: 'Payment Reminders', desc: 'Get notified about pending payments' },
-            { key: 'overdueAlerts', label: 'Overdue Alerts', desc: 'Alert when customers are overdue' },
-            { key: 'dailySummary', label: 'Daily Summary', desc: 'Receive end-of-day business summary' },
-            { key: 'invoiceAlerts', label: 'Invoice Alerts', desc: 'Notify on unpaid / overdue invoices' },
-            { key: 'emailNotifications', label: 'Email Notifications', desc: 'Send alerts to your email' },
-            { key: 'smsNotifications', label: 'SMS Notifications', desc: 'Send alerts via SMS' },
+            { key: 'paymentReminders', label: 'Payment due (in-app)', desc: 'App mein dikhao jab customer ka balance pending ho' },
+            { key: 'overdueAlerts', label: 'Overdue (in-app)', desc: 'App mein dikhao jab customer overdue ho' },
+            { key: 'dailySummary', label: 'Daily summary (in-app)', desc: 'Roz aapke liye business summary' },
+            { key: 'invoiceAlerts', label: 'Invoice alerts (in-app)', desc: 'Unpaid / overdue invoices' },
+            { key: 'emailNotifications', label: 'Email me (automatic)', desc: 'Naye alerts aapke login email pe bhejo' },
+            { key: 'smsNotifications', label: 'SMS me (automatic)', desc: 'Naye alerts aapke mobile pe SMS bhejo' },
           ].map((item) => (
             <label key={item.key} className="flex items-center justify-between gap-4 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/40 cursor-pointer transition-colors">
               <div>
@@ -194,6 +210,36 @@ export default function Settings() {
               </div>
             </label>
           ))}
+        </div>
+        <div className="mt-4 pt-4 border-t border-border dark:border-slate-700">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            loading={testingAlert}
+            onClick={async () => {
+              setTestingAlert(true);
+              try {
+                const res = await testOwnerAlert(true);
+                const email = res?.ownerChannels?.email;
+                const sms = res?.ownerChannels?.sms;
+                if (email?.ok) toast.success(`Email sent to ${email.to}`);
+                else toast.error(`Email: ${email?.error || email?.reason || 'failed'}`);
+                if (sms?.ok && !sms?.demo) toast.success(`SMS sent to ${sms.to}`);
+                else if (sms?.demo) toast.info(`SMS demo only: ${sms.detail || 'check server'}`);
+                else toast.error(`SMS: ${typeof sms?.error === 'string' ? sms.error : (sms?.reason || JSON.stringify(sms?.error) || 'failed')}`);
+              } catch (err) {
+                toast.error(err.message || 'Test failed — restart Django after creating backend/.env');
+              } finally {
+                setTestingAlert(false);
+              }
+            }}
+          >
+            Send test email + SMS to me
+          </Button>
+          <p className="text-xs text-muted mt-2">
+            Keys must be in <code className="px-1 rounded bg-slate-100 dark:bg-slate-700">backend/.env</code> (not .env.example), then restart Django.
+          </p>
         </div>
       </Card>
 
@@ -221,7 +267,7 @@ export default function Settings() {
         onClose={() => setShowReset(false)}
         onConfirm={async () => {
           try {
-            await resetDemoData();
+            await refreshFromServer();
             setShowReset(false);
             toast.success('Data refreshed from server');
           } catch (err) {

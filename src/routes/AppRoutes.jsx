@@ -4,6 +4,7 @@ import AuthLayout from '../layouts/AuthLayout';
 import AppLayout from '../layouts/AppLayout';
 
 import Login from '../pages/auth/Login';
+import SignUp from '../pages/auth/SignUp';
 import ForgotPassword from '../pages/auth/ForgotPassword';
 import OTPVerification from '../pages/auth/OTPVerification';
 import ResetPassword from '../pages/auth/ResetPassword';
@@ -33,6 +34,8 @@ export default function AppRoutes() {
       {/* Auth routes */}
       <Route element={<AuthLayout />}>
         <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<SignUp />} />
+        <Route path="/register" element={<Navigate to="/signup" replace />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/otp-verification" element={<OTPVerification />} />
         <Route path="/reset-password" element={<ResetPassword />} />

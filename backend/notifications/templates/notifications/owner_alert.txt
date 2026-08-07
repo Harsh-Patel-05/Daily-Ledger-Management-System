@@ -1,0 +1,18 @@
+Daily Ledger — {{ heading }}
+{{ shop_name }} · {{ date_label }}
+
+Namaste{% if owner_name %} {{ owner_name }}{% endif %},
+
+Aapke shop ke liye {{ count }} naya alert{{ count|pluralize }}:
+
+{% for item in items %}
+- [{{ item.label }}] {{ item.title }}{% if item.amount %} ({{ item.amount }}){% endif %}
+{% if item.message %}  {{ item.message }}
+{% endif %}{% if item.customer_name %}  Customer: {{ item.customer_name }}
+{% endif %}
+{% endfor %}
+App kholo → Notifications.
+
+Yeh alert sirf shop owner ke liye hai. Customer ko message sirf "Send to customer" se manually jaata hai.
+
+© {{ year }} Daily Ledger Management System

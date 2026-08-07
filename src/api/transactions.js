@@ -6,16 +6,19 @@ export function listTransactions(params = '') {
 }
 
 export function createTransaction(data) {
+  const description = data.itemDescription || data.item_description || data.type;
   return api.post('/transactions/', {
     customerId: toPk(data.customerId),
     date: data.date,
     type: data.type,
-    itemDescription: data.itemDescription || data.type,
+    itemDescription: description,
+    item_description: description,
     quantity: data.quantity ?? 1,
     rate: data.rate ?? data.amount,
     amount: data.amount,
     notes: data.notes || '',
     paymentMethod: data.paymentMethod || 'Cash',
+    payment_method: data.paymentMethod || 'Cash',
   });
 }
 

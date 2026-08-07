@@ -2,11 +2,11 @@ import { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  FaArrowLeft, FaCloudUploadAlt, FaMagic, FaCheck, FaTrash, FaPlus, FaFileImage,
+  FaArrowLeft, FaCloudUploadAlt, FaMagic, FaCheck, FaTrash, FaPlus,
 } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
-import { extractInvoiceFromImage, fileToDataUrl, getDemoExtractedInvoice } from '../../utils/ocr';
+import { extractInvoiceFromImage, fileToDataUrl } from '../../utils/ocr';
 import { calcInvoiceTotals } from '../../utils/invoiceUtils';
 import { formatCurrency } from '../../utils/formatters';
 import {
@@ -56,39 +56,50 @@ export default function UploadInvoice() {
     setProgress(0);
     try {
       const result = await extractInvoiceFromImage(file, setProgress);
-      // If OCR confidence is very low, blend with demo helper so UX still works
+      const totals = calcInvoiceTotals(result.items || [], result.discount || 0, result.taxRate ?? 18);
+      setExtracted({
+        ...result,
+        items: result.items?.length
+          ? result.items
+          : [{ id: 1, description: '', hsn: '', quantity: 1, rate: 0, amount: 0 }],
+        subtotal: result.subtotal || totals.subtotal,
+        discount: result.discount || 0,
+        taxRate: result.taxRate ?? 18,
+        taxAmount: result.taxAmount || totals.taxAmount,
+        total: result.total || totals.total,
+        date: result.date || new Date().toISOString().split('T')[0],
+      });
       if ((result.confidence || 0) < 25 && !result.items?.length && !result.total) {
-        const demo = getDemoExtractedInvoice();
-        setExtracted({
-          ...demo,
-          notes: 'OCR found little text — demo sample loaded. Edit fields as needed, or re-upload a clearer image.',
-          confidence: 40,
-          ocrText: result.ocrText,
-        });
-        toast.info('Low OCR confidence — sample data loaded for editing');
+        toast.info('Low OCR confidence — please fill in the fields manually');
       } else {
-        const totals = calcInvoiceTotals(result.items, result.discount, result.taxRate);
-        setExtracted({
-          ...result,
-          ...totals,
-          total: result.total || totals.total,
-          taxAmount: result.taxAmount || totals.taxAmount,
-        });
-        toast.success(`Data extracted (${result.confidence}% confidence)`);
+        toast.success(`Data extracted (${result.confidence || 0}% confidence)`);
       }
     } catch (err) {
       console.error(err);
-      setExtracted(getDemoExtractedInvoice());
-      toast.info('OCR unavailable — demo extract loaded. Edit and save.');
+      toast.error(err.message || 'OCR failed — enter invoice details manually');
+      setExtracted({
+        invoiceNumber: '',
+        date: new Date().toISOString().split('T')[0],
+        customerName: '',
+        businessName: '',
+        customerGst: '',
+        customerMobile: '',
+        customerEmail: '',
+        customerAddress: '',
+        items: [{ id: 1, description: '', hsn: '', quantity: 1, rate: 0, amount: 0 }],
+        subtotal: 0,
+        discount: 0,
+        taxRate: 18,
+        taxAmount: 0,
+        total: 0,
+        notes: '',
+        confidence: 0,
+        ocrText: '',
+      });
     } finally {
       setScanning(false);
       setProgress(0);
     }
-  };
-
-  const useDemo = () => {
-    setExtracted(getDemoExtractedInvoice());
-    toast.info('Demo invoice data loaded — edit then save');
   };
 
   const updateField = (key, value) => {
@@ -203,9 +214,6 @@ export default function UploadInvoice() {
             <Button onClick={runOcr} disabled={!file || scanning} loading={scanning}>
               <FaMagic size={12} /> {scanning ? `Scanning… ${progress}%` : 'Extract Data (OCR)'}
             </Button>
-            <Button variant="outline" onClick={useDemo}>
-              <FaFileImage size={12} /> Load Demo Extract
-            </Button>
             {preview && (
               <Button
                 variant="ghost"
@@ -250,7 +258,7 @@ export default function UploadInvoice() {
             <div className="py-16 text-center">
               <FaMagic className="mx-auto text-slate-300 mb-3" size={32} />
               <p className="text-sm text-muted">Upload an invoice and click Extract Data</p>
-              <p className="text-xs text-muted mt-1">Or use Demo Extract to try the flow</p>
+              <p className="text-xs text-muted mt-1">You can edit any field before saving</p>
             </div>
           ) : (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">

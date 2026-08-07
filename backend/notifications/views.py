@@ -3,8 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters import rest_framework as filters
+
+from customers.models import Customer
 from .models import Notification, ActivityLog
 from .serializers import NotificationSerializer, ActivityLogSerializer
+from .services import sync_notifications
 
 
 class NotificationFilter(filters.FilterSet):
@@ -55,6 +58,97 @@ class NotificationViewSet(viewsets.ModelViewSet):
     def unread_count(self, request):
         count = self.get_queryset().filter(is_read=False).count()
         return Response({'count': count})
+
+    @action(detail=False, methods=['post'], url_path='send-reminder')
+    def send_reminder(self, request):
+        raw_id = request.data.get('customerId') or request.data.get('customer')
+        channel = (request.data.get('channel') or 'inapp').lower()
+        message = (request.data.get('message') or '').strip()
+        if not raw_id:
+            return Response({'detail': 'customerId is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        pk = str(raw_id).replace('cust_', '')
+        try:
+            customer = Customer.objects.get(pk=pk, owner=request.user)
+        except (Customer.DoesNotExist, ValueError):
+            return Response({'detail': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        title = f'Payment reminder — {customer.name}'
+        body = message or (
+            f'Reminder sent to {customer.name} for outstanding '
+            f'₹{customer.current_balance} via {channel}.'
+        )
+        notif = Notification.objects.create(
+            owner=request.user,
+            type=Notification.Type.PAYMENT_REMINDER,
+            title=title,
+            message=body,
+            customer=customer,
+            amount=customer.current_balance,
+        )
+        ActivityLog.objects.create(
+            owner=request.user,
+            type='reminder',
+            message=f'Reminder sent to {customer.name} via {channel}',
+        )
+        return Response({
+            'notification': NotificationSerializer(notif).data,
+            'channel': channel,
+            'detail': 'Reminder recorded',
+            'customer': {
+                'id': customer.pk,
+                'name': customer.name,
+                'mobile': customer.mobile,
+                'email': customer.email,
+            },
+            # Forever-free deep links (client opens WhatsApp / SMS / Mail)
+            'free': True,
+            'provider': 'native_deep_link',
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post', 'get'], url_path='sync')
+    def sync(self, request):
+        """Scan ledger and create missing alerts for the current user."""
+        result = sync_notifications(request.user)
+        rows = NotificationSerializer(result['notifications'], many=True).data
+        unread = self.get_queryset().filter(is_read=False).count()
+        return Response({
+            'created': result['created'],
+            'unreadCount': unread,
+            'notifications': rows,
+            'ownerChannels': result.get('ownerChannels'),
+        })
+
+    @action(detail=False, methods=['post'], url_path='test-owner-alert')
+    def test_owner_alert(self, request):
+        """Force-send a test email/SMS to the logged-in shop owner (for setup checks)."""
+        from .owner_channels import dispatch_owner_channels
+        from accounts.models import BusinessSettings
+
+        settings_obj, _ = BusinessSettings.objects.get_or_create(user=request.user)
+        force = str(request.query_params.get('force') or request.data.get('force') or '').lower() in (
+            '1', 'true', 'yes',
+        )
+        if force:
+            settings_obj.email_notifications = True
+            settings_obj.sms_notifications = True
+
+        notif = Notification.objects.create(
+            owner=request.user,
+            type=Notification.Type.PAYMENT_REMINDER,
+            title='Test alert - Daily Ledger',
+            message='Yeh test message hai. Agar yeh email/SMS mila to owner alerts theek kaam kar rahe hain.',
+        )
+        channels = dispatch_owner_channels(request.user, [notif], settings_obj)
+        return Response({
+            'detail': 'Test alert dispatched',
+            'notification': NotificationSerializer(notif).data,
+            'ownerChannels': channels,
+            'hints': {
+                'email': 'Check inbox + spam. SMTP must be in backend/.env (not .env.example).',
+                'sms': 'Needs FAST2SMS_API_KEY in backend/.env and Fast2SMS wallet credit.',
+            },
+        }, status=status.HTTP_201_CREATED)
 
 
 class ActivityLogListView(APIView):

@@ -6,6 +6,7 @@ import { AppProvider } from './context/AppContext';
 import { ModalProvider } from './context/ModalContext';
 import AppRoutes from './routes/AppRoutes';
 import GlobalModals from './components/modals/GlobalModals';
+import NotificationWatcher from './components/NotificationWatcher';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
               <ModalProvider>
                 <AppRoutes />
                 <GlobalModals />
+                <NotificationWatcher />
               </ModalProvider>
             </AppProvider>
           </ToastProvider>

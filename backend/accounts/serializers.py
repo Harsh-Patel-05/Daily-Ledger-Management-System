@@ -17,47 +17,69 @@ class UserSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['name'] = instance.name
-        data['id'] = f'user_{instance.pk}'
+        data['id'] = instance.pk
         return data
 
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=6)
+    confirm_password = serializers.CharField(write_only=True, min_length=6, required=False)
     name = serializers.CharField(max_length=150)
     mobile = serializers.CharField(required=False, allow_blank=True)
     shop_name = serializers.CharField(required=False, allow_blank=True)
+
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'shopName' in data and 'shop_name' not in data:
+            data['shop_name'] = data.pop('shopName')
+        if 'confirmPassword' in data and 'confirm_password' not in data:
+            data['confirm_password'] = data.pop('confirmPassword')
+        return super().to_internal_value(data)
 
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError('Email already registered')
         return value.lower()
 
-    def validate_password(self, value):
-        validate_password(value)
+    def validate_mobile(self, value):
+        if not value:
+            return value
+        digits = ''.join(c for c in value if c.isdigit())
+        if len(digits) < 10:
+            raise serializers.ValidationError('Enter a valid 10-digit mobile number')
         return value
+
+    def validate(self, attrs):
+        confirm = attrs.get('confirm_password')
+        if confirm is not None and attrs['password'] != confirm:
+            raise serializers.ValidationError({'confirm_password': 'Passwords do not match'})
+        validate_password(attrs['password'])
+        return attrs
 
     def create(self, validated):
         name = validated.pop('name')
+        validated.pop('confirm_password', None)
         parts = name.split(' ', 1)
+        shop = validated.get('shop_name') or f"{parts[0]}'s Shop"
         user = User.objects.create_user(
             email=validated['email'],
             password=validated['password'],
             first_name=parts[0],
             last_name=parts[1] if len(parts) > 1 else '',
             mobile=validated.get('mobile', ''),
-            shop_name=validated.get('shop_name', ''),
+            shop_name=shop,
         )
         BusinessProfile.objects.create(
             user=user,
-            shop_name=validated.get('shop_name') or f"{parts[0]}'s Shop",
+            shop_name=shop,
             owner_name=name,
             email=user.email,
             mobile=validated.get('mobile', ''),
         )
         BusinessSettings.objects.create(
             user=user,
-            business_name=validated.get('shop_name') or f"{parts[0]}'s Shop",
+            business_name=shop,
         )
         return user
 

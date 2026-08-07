@@ -168,12 +168,49 @@ class ProfileView(APIView):
         ser = BusinessProfileSerializer(profile, data=data, partial=True, context={'request': request})
         ser.is_valid(raise_exception=True)
         ser.save()
+        # keep BusinessSettings in sync (Settings page reads gstNumber from here)
+        settings_obj, _ = BusinessSettings.objects.get_or_create(user=request.user)
+        dirty = False
+        if profile.gst and settings_obj.gst_number != profile.gst:
+            settings_obj.gst_number = profile.gst
+            dirty = True
+        if profile.shop_name and settings_obj.business_name != profile.shop_name:
+            settings_obj.business_name = profile.shop_name
+            dirty = True
+        if profile.invoice_prefix and settings_obj.invoice_prefix != profile.invoice_prefix:
+            settings_obj.invoice_prefix = profile.invoice_prefix
+            dirty = True
+        if dirty:
+            settings_obj.save()
         return Response(ser.data)
 
 
 class SettingsView(APIView):
     def get(self, request):
         settings_obj, _ = BusinessSettings.objects.get_or_create(user=request.user)
+        profile, _ = BusinessProfile.objects.get_or_create(
+            user=request.user,
+            defaults={
+                'shop_name': request.user.shop_name or 'My Shop',
+                'owner_name': request.user.name,
+                'email': request.user.email,
+                'mobile': request.user.mobile,
+            },
+        )
+        # Backfill from profile when settings fields were never set
+        dirty = False
+        if not settings_obj.gst_number and profile.gst:
+            settings_obj.gst_number = profile.gst
+            dirty = True
+        if not settings_obj.business_name and profile.shop_name:
+            settings_obj.business_name = profile.shop_name
+            dirty = True
+        if (not settings_obj.invoice_prefix or settings_obj.invoice_prefix == 'INV') and profile.invoice_prefix:
+            if profile.invoice_prefix != settings_obj.invoice_prefix:
+                settings_obj.invoice_prefix = profile.invoice_prefix
+                dirty = True
+        if dirty:
+            settings_obj.save()
         return Response(BusinessSettingsSerializer(settings_obj).data)
 
     def patch(self, request):

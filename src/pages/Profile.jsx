@@ -6,7 +6,6 @@ import { useToast } from '../context/ToastContext';
 import { Breadcrumbs, Card, CardHeader, Avatar, Input, Button } from '../components/ui';
 import { formatPhone, formatDate } from '../utils/formatters';
 import { DEFAULT_LOGO } from '../assets/defaultLogo';
-import { fileToDataUrl } from '../utils/ocr';
 
 export default function Profile() {
   const { profile, setProfile, uploadLogo } = useApp();
@@ -18,7 +17,9 @@ export default function Profile() {
   const [editMode, setEditMode] = useState(false);
   const [form, setForm] = useState(profile);
   const [saving, setSaving] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef(null);
+  const avatarInputRef = useRef(null);
 
   useEffect(() => {
     setForm(profile);
@@ -26,23 +27,24 @@ export default function Profile() {
 
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       toast.error('Please upload an image file');
       return;
     }
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('Logo must be under 2MB');
+      toast.error('Image must be under 2MB');
       return;
     }
+    setLogoUploading(true);
     try {
       await uploadLogo(file);
-      toast.success('Shop logo updated — it will appear on invoices');
+      toast.success('Photo updated — it will appear on invoices too');
     } catch (err) {
-      // Fallback preview if upload fails
-      const dataUrl = await fileToDataUrl(file);
-      setForm((f) => ({ ...f, logo: dataUrl }));
-      toast.error(err.message || 'Logo upload failed');
+      toast.error(err.message || 'Upload failed');
+    } finally {
+      setLogoUploading(false);
     }
   };
 
@@ -102,14 +104,29 @@ export default function Profile() {
         <Card className="lg:col-span-1">
           <div className="flex flex-col items-center text-center">
             <div className="relative mb-4">
-              <Avatar name={profile.ownerName} size="xl" />
-              <button className="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full shadow-sm hover:bg-primary-dark transition-colors">
+              <Avatar name={profile.ownerName} src={profile.logo || undefined} size="xl" />
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleLogoUpload}
+              />
+              <button
+                type="button"
+                disabled={logoUploading}
+                onClick={() => avatarInputRef.current?.click()}
+                title="Change profile photo"
+                aria-label="Change profile photo"
+                className="absolute bottom-0 right-0 p-2 bg-primary text-white rounded-full shadow-sm hover:bg-primary-dark transition-colors disabled:opacity-60"
+              >
                 <FaCamera size={12} />
               </button>
             </div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">{profile.ownerName}</h2>
             <p className="text-sm text-muted">{profile.shopName}</p>
             <p className="text-xs text-muted mt-2">Member since {formatDate(profile.joinedAt)}</p>
+            {logoUploading && <p className="text-xs text-primary mt-1">Uploading…</p>}
           </div>
 
           <div className="mt-6 space-y-3 border-t border-border dark:border-slate-700 pt-5">
@@ -187,16 +204,21 @@ export default function Profile() {
                   onChange={handleLogoUpload}
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => logoInputRef.current?.click()}>
+                  <Button size="sm" variant="outline" loading={logoUploading} onClick={() => logoInputRef.current?.click()}>
                     Upload Logo
                   </Button>
                   {profile.logo && (
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => {
-                        setProfile({ ...profile, logo: null });
-                        toast.info('Reverted to default logo');
+                      disabled={logoUploading}
+                      onClick={async () => {
+                        try {
+                          await setProfile({ ...profile, logo: null });
+                          toast.success('Reverted to default logo');
+                        } catch (err) {
+                          toast.error(err.message || 'Reset failed');
+                        }
                       }}
                     >
                       Reset

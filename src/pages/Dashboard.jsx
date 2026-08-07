@@ -18,8 +18,12 @@ import {
   PieChart, Pie, Cell, Legend,
 } from 'recharts';
 import { motion } from 'framer-motion';
+import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { monthlyCollection, creditVsPaid } from '../data/analytics';
+import {
+  monthlyTrendFromAnalytics,
+  creditVsPaidFromReports,
+} from '../utils/reportBuilders';
 import StatCard from '../components/ui/StatCard';
 import Card, { CardHeader } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -42,21 +46,15 @@ export default function Dashboard() {
   const recentActivity = notifications.slice(0, 5);
   const unpaidInvoices = invoices.filter((i) => i.status !== 'paid').slice(0, 5);
 
-  const chartMonthly = (analyticsData?.monthlyTrend?.length
-    ? analyticsData.monthlyTrend.map((m) => ({
-        month: m.month?.slice(5) || m.month,
-        credit: m.credit || 0,
-        collection: m.payment || 0,
-      }))
-    : monthlyCollection);
+  const chartMonthly = useMemo(
+    () => monthlyTrendFromAnalytics(analyticsData),
+    [analyticsData]
+  );
 
-  const chartPie = reportsData?.summary
-    ? [
-        { name: 'Credit', value: reportsData.summary.credit || 0, color: '#2563EB' },
-        { name: 'Paid', value: reportsData.summary.payment || 0, color: '#10B981' },
-        { name: 'Pending', value: Math.max(0, (reportsData.summary.credit || 0) - (reportsData.summary.payment || 0)), color: '#F59E0B' },
-      ]
-    : creditVsPaid;
+  const chartPie = useMemo(
+    () => creditVsPaidFromReports(reportsData, stats),
+    [reportsData, stats]
+  );
 
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="space-y-6">
@@ -80,10 +78,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Grid */}
       <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Today's Sales" value={stats.todaySales} icon={FaRupeeSign} color="blue" trend={{ up: true, value: '12% vs yesterday' }} />
-        <StatCard title="Today's Collection" value={stats.todayCollection} icon={FaHandHoldingUsd} color="green" trend={{ up: true, value: '8% vs yesterday' }} />
+        <StatCard title="Today's Sales" value={stats.todaySales} icon={FaRupeeSign} color="blue" />
+        <StatCard title="Today's Collection" value={stats.todayCollection} icon={FaHandHoldingUsd} color="green" />
         <StatCard title="Pending Amount" value={stats.pendingAmount} icon={FaClock} color="amber" />
         <StatCard title="Invoice Due" value={stats.invoiceDue} icon={FaFileInvoiceDollar} color="red" />
         <StatCard title="Total Customers" value={String(stats.totalCustomers)} icon={FaUsers} color="blue" />
@@ -92,61 +89,67 @@ export default function Dashboard() {
         <StatCard title="Overdue Customers" value={String(stats.overdueCustomers)} icon={FaClock} color="amber" />
       </motion.div>
 
-      {/* Charts */}
       <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Card className="xl:col-span-2">
           <CardHeader title="Monthly Collection" subtitle="Credit vs Collection trend" />
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartMonthly}>
-                <defs>
-                  <linearGradient id="gCredit" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563EB" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="gColl" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10B981" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94A3B8" />
-                <YAxis tick={{ fontSize: 12 }} stroke="#94A3B8" tickFormatter={(v) => `₹${v / 1000}k`} />
-                <Tooltip formatter={(v) => formatCurrency(v)} />
-                <Area type="monotone" dataKey="credit" stroke="#2563EB" fill="url(#gCredit)" strokeWidth={2} name="Credit" />
-                <Area type="monotone" dataKey="collection" stroke="#10B981" fill="url(#gColl)" strokeWidth={2} name="Collection" />
-              </AreaChart>
-            </ResponsiveContainer>
+            {chartMonthly.length === 0 ? (
+              <p className="text-sm text-muted text-center py-24">No transaction data yet</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartMonthly}>
+                  <defs>
+                    <linearGradient id="gCredit" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#2563EB" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#2563EB" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="gColl" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94A3B8" />
+                  <YAxis tick={{ fontSize: 12 }} stroke="#94A3B8" tickFormatter={(v) => `₹${v / 1000}k`} />
+                  <Tooltip formatter={(v) => formatCurrency(v)} />
+                  <Area type="monotone" dataKey="credit" stroke="#2563EB" fill="url(#gCredit)" strokeWidth={2} name="Credit" />
+                  <Area type="monotone" dataKey="collection" stroke="#10B981" fill="url(#gColl)" strokeWidth={2} name="Collection" />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </Card>
 
         <Card>
           <CardHeader title="Credit vs Paid" subtitle="Current distribution" />
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartPie}
-                  cx="50%"
-                  cy="45%"
-                  innerRadius={55}
-                  outerRadius={85}
-                  paddingAngle={3}
-                  dataKey="value"
-                >
-                  {chartPie.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(v) => formatCurrency(v)} />
-                <Legend verticalAlign="bottom" height={36} />
-              </PieChart>
-            </ResponsiveContainer>
+            {chartPie.length === 0 ? (
+              <p className="text-sm text-muted text-center py-24">No summary data yet</p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartPie}
+                    cx="50%"
+                    cy="45%"
+                    innerRadius={55}
+                    outerRadius={85}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {chartPie.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v) => formatCurrency(v)} />
+                  <Legend verticalAlign="bottom" height={36} />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </Card>
       </motion.div>
 
-      {/* Quick Actions + widgets */}
       <motion.div variants={item} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <Card>
           <CardHeader title="Quick Actions" />
@@ -203,15 +206,19 @@ export default function Dashboard() {
         <Card>
           <CardHeader title="Activity Log" />
           <div className="space-y-3 max-h-64 overflow-y-auto scrollbar-thin">
-            {activityLog.slice(0, 8).map((a) => (
-              <div key={a.id} className="flex gap-3 items-start">
-                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-primary" />
-                <div className="min-w-0">
-                  <p className="text-sm text-slate-700 dark:text-slate-200">{a.message}</p>
-                  <p className="text-[10px] text-muted">{formatDate(a.at)}</p>
+            {activityLog.length === 0 ? (
+              <p className="text-sm text-muted text-center py-6">No activity yet</p>
+            ) : (
+              activityLog.slice(0, 8).map((a) => (
+                <div key={a.id} className="flex gap-3 items-start">
+                  <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-primary" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-700 dark:text-slate-200">{a.message}</p>
+                    <p className="text-[10px] text-muted">{formatDate(a.at)}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
@@ -221,20 +228,23 @@ export default function Dashboard() {
             action={<Link to="/notifications" className="text-xs text-primary font-medium hover:underline">View all</Link>}
           />
           <div className="space-y-3">
-            {recentActivity.map((n) => (
-              <div key={n.id} className="flex gap-3 items-start">
-                <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? 'bg-slate-300' : 'bg-primary'}`} />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{n.title}</p>
-                  <p className="text-xs text-muted truncate">{n.message}</p>
+            {recentActivity.length === 0 ? (
+              <p className="text-sm text-muted text-center py-6">No alerts</p>
+            ) : (
+              recentActivity.map((n) => (
+                <div key={n.id} className="flex gap-3 items-start">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? 'bg-slate-300' : 'bg-primary'}`} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{n.title}</p>
+                    <p className="text-xs text-muted truncate">{n.message}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
       </motion.div>
 
-      {/* Recent Transactions Table */}
       <motion.div variants={item}>
         <Card>
           <CardHeader
@@ -247,31 +257,35 @@ export default function Dashboard() {
             }
           />
           <div className="overflow-x-auto scrollbar-thin">
-            <table className="w-full min-w-[700px]">
-              <thead>
-                <tr className="border-b border-border dark:border-slate-700">
-                  {['Date', 'Customer', 'Type', 'Description', 'Method', 'Amount'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60 dark:divide-slate-700/60">
-                {recentTxs.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{formatDate(tx.date)}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">{tx.customerName}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={tx.type === 'payment' ? 'success' : tx.type === 'credit' ? 'primary' : tx.type === 'expense' ? 'danger' : 'warning'}>
-                        {TRANSACTION_TYPES[tx.type]?.label || tx.type}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{tx.itemDescription}</td>
-                    <td className="px-4 py-3 text-sm text-muted">{tx.paymentMethod}</td>
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{formatCurrency(tx.amount)}</td>
+            {recentTxs.length === 0 ? (
+              <p className="text-sm text-muted text-center py-10">No transactions yet</p>
+            ) : (
+              <table className="w-full min-w-[700px]">
+                <thead>
+                  <tr className="border-b border-border dark:border-slate-700">
+                    {['Date', 'Customer', 'Type', 'Description', 'Method', 'Amount'].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">{h}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border/60 dark:divide-slate-700/60">
+                  {recentTxs.map((tx) => (
+                    <tr key={tx.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40 transition-colors">
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{formatDate(tx.date)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-800 dark:text-slate-100">{tx.customerName}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={tx.type === 'payment' ? 'success' : tx.type === 'credit' ? 'primary' : tx.type === 'expense' ? 'danger' : 'warning'}>
+                          {TRANSACTION_TYPES[tx.type]?.label || tx.type}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{tx.itemDescription}</td>
+                      <td className="px-4 py-3 text-sm text-muted">{tx.paymentMethod}</td>
+                      <td className="px-4 py-3 text-sm font-semibold text-slate-800 dark:text-slate-100">{formatCurrency(tx.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </Card>
       </motion.div>

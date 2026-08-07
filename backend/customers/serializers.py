@@ -15,7 +15,6 @@ class CustomerSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['id'] = instance.pk
-        data['pk'] = instance.pk
         data['businessName'] = data['business_name']
         data['creditLimit'] = float(data['credit_limit'] or 0)
         data['currentBalance'] = float(data['current_balance'] or 0)

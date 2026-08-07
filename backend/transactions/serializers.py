@@ -4,20 +4,37 @@ from .models import Transaction
 
 
 class TransactionSerializer(serializers.ModelSerializer):
-    customer_id = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
     customerId = serializers.CharField(write_only=True, required=False, allow_null=True, allow_blank=True)
-    itemDescription = serializers.CharField(source='item_description', required=False)
-    paymentMethod = serializers.CharField(source='payment_method', required=False)
 
     class Meta:
         model = Transaction
         fields = (
-            'id', 'customer', 'customer_id', 'customerId', 'date', 'type',
-            'item_description', 'itemDescription', 'quantity', 'rate', 'amount',
-            'notes', 'payment_method', 'paymentMethod', 'invoice',
+            'id', 'customer', 'customerId', 'date', 'type',
+            'item_description', 'quantity', 'rate', 'amount',
+            'notes', 'payment_method', 'invoice',
             'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'created_at', 'updated_at', 'invoice')
+        extra_kwargs = {
+            'customer': {'required': False, 'allow_null': True},
+            'item_description': {'required': False, 'allow_blank': True},
+            'payment_method': {'required': False, 'allow_blank': True},
+            'notes': {'required': False, 'allow_blank': True},
+            'quantity': {'required': False},
+            'rate': {'required': False},
+        }
+
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        aliases = {
+            'itemDescription': 'item_description',
+            'paymentMethod': 'payment_method',
+            'customer_id': 'customerId',
+        }
+        for camel, snake in aliases.items():
+            if camel in data and snake not in data:
+                data[snake] = data[camel]
+        return super().to_internal_value(data)
 
     def _resolve_customer(self, raw_id):
         if not raw_id:
@@ -37,12 +54,13 @@ class TransactionSerializer(serializers.ModelSerializer):
         if validated.get('type') != Transaction.Type.EXPENSE and not customer:
             raise serializers.ValidationError({'customerId': 'Customer is required'})
         validated.pop('customer', None)
+        validated.pop('customerId', None)
         tx = Transaction.objects.create(
             owner=request.user,
             customer=customer,
             date=validated['date'],
             type=validated['type'],
-            item_description=validated.get('item_description') or validated['type'],
+            item_description=(validated.get('item_description') or '').strip() or validated['type'],
             quantity=validated.get('quantity') or 1,
             rate=validated.get('rate') or validated.get('amount') or 0,
             amount=validated['amount'],
@@ -55,8 +73,7 @@ class TransactionSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         return {
-            'id': f'txn_{instance.pk}',
-            'pk': instance.pk,
+            'id': instance.pk,
             'date': instance.date.isoformat() if instance.date else None,
             'customerId': instance.customer_id,
             'customerName': instance.customer_name,

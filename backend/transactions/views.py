@@ -7,6 +7,7 @@ from .models import Transaction
 from .serializers import TransactionSerializer
 from customers.models import Customer
 from notifications.models import ActivityLog
+from notifications.services import notify_credit_transaction
 
 
 class TransactionFilter(filters.FilterSet):
@@ -54,6 +55,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
             type='transaction',
             message=f'Transaction: {tx.type} ₹{tx.amount}',
         )
+        notify_credit_transaction(self.request.user, tx)
 
     def perform_destroy(self, instance):
         customer = instance.customer

@@ -25,7 +25,7 @@ import Avatar from '../ui/Avatar';
 import { cn } from '../../utils/formatters';
 
 export default function Navbar() {
-  const { setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, unreadCount, customers, transactions, setCommandOpen } = useApp();
+  const { setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, unreadCount, customers, transactions, setCommandOpen, profile } = useApp();
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { openModal } = useModal();
@@ -204,7 +204,7 @@ export default function Navbar() {
               onClick={() => setProfileOpen(!profileOpen)}
               className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
-              <Avatar name={user?.name || 'User'} size="sm" />
+              <Avatar name={user?.name || 'User'} src={profile?.logo || undefined} size="sm" />
               <div className="hidden md:block text-left">
                 <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-tight">{user?.name}</p>
                 <p className="text-[10px] text-muted">{user?.role}</p>

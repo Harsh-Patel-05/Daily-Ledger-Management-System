@@ -137,11 +137,10 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
         read_only_fields = ('created_at', 'updated_at', 'logo_url')
 
     def get_logo_url(self, obj):
-        if obj.logo:
-            request = self.context.get('request')
-            url = obj.logo.url
-            return request.build_absolute_uri(url) if request else url
-        return None
+        if not obj.logo:
+            return None
+        # Relative /media/... so Vite proxy and page refresh always resolve correctly
+        return obj.logo.url
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -155,7 +154,12 @@ class BusinessProfileSerializer(serializers.ModelSerializer):
         data['bankBranch'] = data['bank_branch']
         data['upiId'] = data['upi_id']
         data['joinedAt'] = instance.created_at.date().isoformat() if instance.created_at else None
-        data['logo'] = data.get('logo_url')
+        logo = data.get('logo_url')
+        # Cache-bust so browser shows new logo after upload/refresh
+        if logo and instance.updated_at:
+            sep = '&' if '?' in logo else '?'
+            logo = f'{logo}{sep}v={int(instance.updated_at.timestamp())}'
+        data['logo'] = logo
         return data
 
 
@@ -173,6 +177,7 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
             'currency': data['currency'],
             'language': data['language'],
             'theme': data['theme'],
+            'accentColor': data.get('accent_color') or 'blue',
             'fiscalYearStart': data['fiscal_year_start'],
             'defaultTaxRate': float(data['default_tax_rate']),
             'defaultPaymentTerms': data['default_payment_terms'],
@@ -195,6 +200,7 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
             'currency': 'currency',
             'language': 'language',
             'theme': 'theme',
+            'accentColor': 'accent_color',
             'fiscalYearStart': 'fiscal_year_start',
             'defaultTaxRate': 'default_tax_rate',
             'defaultPaymentTerms': 'default_payment_terms',

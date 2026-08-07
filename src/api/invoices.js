@@ -66,6 +66,9 @@ export function duplicateInvoice(id) {
   return api.post(`/invoices/${toPk(id) ?? id}/duplicate/`);
 }
 
-export function markInvoicePaid(id) {
-  return api.post(`/invoices/${toPk(id) ?? id}/mark-paid/`);
+export function markInvoicePaid(id, extra = {}) {
+  const body = {};
+  if (extra.method || extra.paymentMethod) body.method = extra.method || extra.paymentMethod;
+  if (extra.notes) body.notes = extra.notes;
+  return api.post(`/invoices/${toPk(id) ?? id}/mark-paid/`, body);
 }

@@ -40,15 +40,24 @@ export default function Sidebar() {
     : 'Update profile details';
 
   const SidebarContent = ({ collapsed = false }) => (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full" data-tour="sidebar">
       <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-border/60 dark:border-slate-700', collapsed && 'justify-center px-2')}>
-        <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
-          <FaBookOpen className="text-white" size={16} />
-        </div>
+        {profile?.logo ? (
+          <img
+            key={profile.logo}
+            src={profile.logo}
+            alt={shopLabel}
+            className="w-9 h-9 rounded-xl object-cover border border-border shrink-0 bg-white"
+          />
+        ) : (
+          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center shrink-0">
+            <FaBookOpen className="text-white" size={16} />
+          </div>
+        )}
         {!collapsed && (
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-slate-800 dark:text-white truncate">Daily Ledger</h1>
-            <p className="text-[10px] text-muted truncate">Management System</p>
+            <h1 className="text-sm font-bold text-slate-800 dark:text-white truncate">{shopLabel}</h1>
+            <p className="text-[10px] text-muted truncate">Daily Ledger</p>
           </div>
         )}
       </div>
@@ -56,10 +65,18 @@ export default function Sidebar() {
       <nav className="flex-1 overflow-y-auto scrollbar-thin py-4 px-3 space-y-1">
         {menuItems.map((item) => {
           const isActive = location.pathname.startsWith(item.to);
+          const tourId =
+            item.to === '/customers' ? 'nav-customers'
+              : item.to === '/transactions' ? 'nav-transactions'
+                : item.to === '/invoices' ? 'nav-invoices'
+                  : item.to === '/ledger' ? 'nav-ledger'
+                    : item.to === '/settings' ? 'nav-settings'
+                      : undefined;
           return (
             <NavLink
               key={item.to}
               to={item.to}
+              data-tour={tourId}
               onClick={() => setSidebarOpen(false)}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200',
@@ -103,7 +120,7 @@ export default function Sidebar() {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          'hidden lg:flex flex-col fixed left-0 top-0 h-screen bg-white dark:bg-slate-800 border-r border-border dark:border-slate-700 z-30 transition-all duration-300',
+          'hidden lg:flex flex-col fixed left-0 top-0 h-screen bg-surface dark:bg-surface border-r border-border dark:border-border z-30 transition-all duration-300',
           sidebarCollapsed ? 'w-[72px]' : 'w-64'
         )}
       >
@@ -126,7 +143,7 @@ export default function Sidebar() {
               animate={{ x: 0 }}
               exit={{ x: -280 }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed left-0 top-0 h-screen w-64 bg-white dark:bg-slate-800 z-50 lg:hidden shadow-xl"
+              className="fixed left-0 top-0 h-screen w-64 bg-surface dark:bg-surface z-50 lg:hidden shadow-xl"
             >
               <button
                 onClick={() => setSidebarOpen(false)}

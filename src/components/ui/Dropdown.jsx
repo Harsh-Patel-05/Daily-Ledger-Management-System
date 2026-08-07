@@ -22,9 +22,9 @@ export default function Dropdown({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'w-full rounded-xl border border-border bg-white px-3.5 py-2.5 text-sm text-slate-800',
+          'w-full rounded-xl border border-border bg-surface px-3.5 py-2.5 text-sm text-slate-800',
           'focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary',
-          'dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100',
+          'dark:bg-surface dark:border-border dark:text-slate-100',
           'appearance-none cursor-pointer transition-all duration-200',
           error && 'border-danger',
           !value && 'text-slate-400'

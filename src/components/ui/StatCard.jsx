@@ -13,7 +13,7 @@ export default function StatCard({ title, value, icon: Icon, color = 'blue', tre
   return (
     <div
       className={cn(
-        'bg-white dark:bg-slate-800 rounded-[12px] p-5 card-shadow border border-border/60 dark:border-slate-700',
+        'bg-surface dark:bg-surface rounded-[12px] p-5 card-shadow border border-border/60 dark:border-border',
         'hover:soft-shadow transition-shadow duration-200',
         className
       )}

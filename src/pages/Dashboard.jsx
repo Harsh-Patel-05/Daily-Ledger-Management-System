@@ -20,6 +20,7 @@ import {
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useModal } from '../context/ModalContext';
 import {
   monthlyTrendFromAnalytics,
   creditVsPaidFromReports,
@@ -42,6 +43,7 @@ const item = {
 
 export default function Dashboard() {
   const { stats, transactions, notifications, activityLog, invoices, analyticsData, reportsData } = useApp();
+  const { openModal } = useModal();
   const recentTxs = transactions.slice(0, 6);
   const recentActivity = notifications.slice(0, 5);
   const unpaidInvoices = invoices.filter((i) => i.status !== 'paid').slice(0, 5);
@@ -66,8 +68,14 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <Button size="sm" onClick={() => openModal('recordPayment')}>
+            <FaHandHoldingUsd size={12} /> Collect
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => openModal('dueCollections')}>
+            <FaClock size={12} /> Due
+          </Button>
           <Link to="/invoices/create">
-            <Button size="sm"><FaFileInvoiceDollar size={12} /> Create Invoice</Button>
+            <Button size="sm" variant="outline"><FaFileInvoiceDollar size={12} /> Create Invoice</Button>
           </Link>
           <Link to="/transactions/add">
             <Button size="sm" variant="outline"><FaPlus size={12} /> New Transaction</Button>
@@ -78,7 +86,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <motion.div variants={item} className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" data-tour="dashboard-stats">
         <StatCard title="Today's Sales" value={stats.todaySales} icon={FaRupeeSign} color="blue" />
         <StatCard title="Today's Collection" value={stats.todayCollection} icon={FaHandHoldingUsd} color="green" />
         <StatCard title="Pending Amount" value={stats.pendingAmount} icon={FaClock} color="amber" />

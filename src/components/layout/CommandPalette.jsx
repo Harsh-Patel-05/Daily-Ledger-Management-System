@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   FaSearch, FaTachometerAlt, FaUsers, FaExchangeAlt, FaFileInvoiceDollar,
   FaBook, FaChartBar, FaChartPie, FaBell, FaCog, FaUser, FaPlus, FaUpload,
-  FaMoon, FaSun, FaKeyboard,
+  FaMoon, FaSun, FaKeyboard, FaHandHoldingUsd, FaClock, FaCalendarCheck, FaReceipt, FaRocket,
 } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useModal } from '../../context/ModalContext';
+import { useTour } from '../../context/TourContext';
 import { cn } from '../../utils/formatters';
 
 const navCommands = [
@@ -25,13 +26,22 @@ const navCommands = [
 ];
 
 export default function CommandPalette() {
-  const { commandOpen, setCommandOpen, customers, invoices } = useApp();
+  const { commandOpen, setCommandOpen, customers, invoices, settings, setSettings } = useApp();
   const { darkMode, toggleDarkMode } = useTheme();
   const { openModal } = useModal();
+  const { startTour } = useTour();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const inputRef = useRef(null);
+
+  const handleThemeToggle = useCallback(() => {
+    const nextMode = darkMode ? 'light' : 'dark';
+    toggleDarkMode();
+    if (settings) {
+      setSettings({ ...settings, theme: nextMode }).catch(() => {});
+    }
+  }, [darkMode, toggleDarkMode, settings, setSettings]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -56,6 +66,34 @@ export default function CommandPalette() {
   const commands = useMemo(() => {
     const dynamic = [
       ...navCommands,
+      {
+        id: 'q-pay',
+        label: 'Record Payment',
+        icon: FaHandHoldingUsd,
+        group: 'Actions',
+        action: () => openModal('recordPayment'),
+      },
+      {
+        id: 'q-due',
+        label: 'Collections Due',
+        icon: FaClock,
+        group: 'Actions',
+        action: () => openModal('dueCollections'),
+      },
+      {
+        id: 'q-day',
+        label: 'Day Closing (Roj Mel)',
+        icon: FaCalendarCheck,
+        group: 'Actions',
+        action: () => openModal('dayClosing'),
+      },
+      {
+        id: 'q-exp',
+        label: 'Quick Expense',
+        icon: FaReceipt,
+        group: 'Actions',
+        action: () => openModal('quickExpense'),
+      },
       {
         id: 'q-cust',
         label: 'Quick Add Customer',
@@ -92,11 +130,18 @@ export default function CommandPalette() {
         group: 'Actions',
       },
       {
+        id: 'tour',
+        label: 'Start Website Tour',
+        icon: FaRocket,
+        group: 'Actions',
+        action: () => startTour(true),
+      },
+      {
         id: 'theme',
         label: darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode',
         icon: darkMode ? FaSun : FaMoon,
         group: 'Actions',
-        action: () => toggleDarkMode(),
+        action: () => handleThemeToggle(),
       },
       ...customers.slice(0, 8).map((c) => ({
         id: `c-${c.id}`,
@@ -124,7 +169,7 @@ export default function CommandPalette() {
         c.sub?.toLowerCase().includes(q) ||
         c.group?.toLowerCase().includes(q)
     );
-  }, [query, customers, invoices, darkMode, toggleDarkMode, openModal]);
+  }, [query, customers, invoices, darkMode, handleThemeToggle, openModal, startTour]);
 
   useEffect(() => setIndex(0), [query]);
 

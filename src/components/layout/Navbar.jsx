@@ -16,31 +16,53 @@ import {
   FaPlus,
   FaUserPlus,
   FaFileInvoiceDollar,
+  FaHandHoldingUsd,
+  FaClock,
+  FaCalendarCheck,
+  FaReceipt,
+  FaEllipsisH,
+  FaQuestionCircle,
 } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useModal } from '../../context/ModalContext';
+import { useTour } from '../../context/TourContext';
 import Avatar from '../ui/Avatar';
 import { cn } from '../../utils/formatters';
 
 export default function Navbar() {
-  const { setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, unreadCount, customers, transactions, setCommandOpen, profile } = useApp();
+  const { setSidebarOpen, sidebarCollapsed, setSidebarCollapsed, unreadCount, customers, transactions, setCommandOpen, profile, settings, setSettings, stats } = useApp();
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { openModal } = useModal();
+  const { startTour } = useTour();
   const navigate = useNavigate();
+
+  const handleThemeToggle = () => {
+    const nextMode = darkMode ? 'light' : 'dark';
+    toggleDarkMode();
+    if (settings) {
+      setSettings({ ...settings, theme: nextMode }).catch(() => {});
+    }
+  };
 
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
   const profileRef = useRef(null);
   const searchRef = useRef(null);
+  const actionsRef = useRef(null);
+  const mobileActionsRef = useRef(null);
 
   useEffect(() => {
     const handler = (e) => {
       if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
+      if (actionsRef.current && !actionsRef.current.contains(e.target)) setActionsOpen(false);
+      if (mobileActionsRef.current && !mobileActionsRef.current.contains(e.target)) setMobileActionsOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -66,15 +88,22 @@ export default function Navbar() {
       ]
     : [];
 
+  const shopName =
+    profile?.shopName ||
+    settings?.businessName ||
+    user?.shopName ||
+    'Your Shop';
+  const ownerName = profile?.ownerName || user?.name || 'Owner';
+
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
   return (
-    <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-border dark:border-slate-700 no-print">
+    <header className="sticky top-0 z-20 bg-surface/80 dark:bg-surface/80 backdrop-blur-md border-b border-border dark:border-border no-print">
       <div className="flex items-center justify-between h-16 px-4 lg:px-6 gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300"
@@ -90,7 +119,7 @@ export default function Navbar() {
           </button>
 
           {/* Global Search */}
-          <div className="relative hidden sm:block" ref={searchRef}>
+          <div className="relative hidden md:block" ref={searchRef}>
             <div className="relative">
               <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
               <input
@@ -111,7 +140,7 @@ export default function Navbar() {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 4 }}
-                  className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-xl soft-shadow border border-border dark:border-slate-700 overflow-hidden"
+                  className="absolute top-full left-0 right-0 mt-2 bg-surface dark:bg-surface rounded-xl soft-shadow border border-border dark:border-border overflow-hidden"
                 >
                   {searchResults.length === 0 ? (
                     <p className="px-4 py-6 text-sm text-muted text-center">No results found</p>
@@ -146,7 +175,24 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
-          <div className="hidden lg:flex items-center gap-1 mr-1">
+          <div className="hidden lg:flex items-center gap-1 mr-1" data-tour="quick-actions">
+            <button
+              onClick={() => openModal('recordPayment')}
+              className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 text-emerald-600"
+              title="Record payment"
+            >
+              <FaHandHoldingUsd size={15} />
+            </button>
+            <button
+              onClick={() => openModal('dueCollections')}
+              className="relative p-2 rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-600"
+              title="Collections due"
+            >
+              <FaClock size={15} />
+              {stats?.overdueCustomers > 0 && (
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-danger" />
+              )}
+            </button>
             <button
               onClick={() => openModal('quickCustomer')}
               className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
@@ -168,9 +214,95 @@ export default function Navbar() {
             >
               <FaFileInvoiceDollar size={15} />
             </button>
+
+            <div className="relative" ref={actionsRef}>
+              <button
+                onClick={() => setActionsOpen((v) => !v)}
+                className="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+                title="More quick actions"
+              >
+                <FaEllipsisH size={15} />
+              </button>
+              <AnimatePresence>
+                {actionsOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    className="absolute right-0 top-full mt-2 w-56 bg-surface dark:bg-surface rounded-xl soft-shadow border border-border overflow-hidden py-1 z-50"
+                  >
+                    {[
+                      { label: 'Day Closing (Roj Mel)', icon: FaCalendarCheck, type: 'dayClosing' },
+                      { label: 'Quick Expense', icon: FaReceipt, type: 'quickExpense' },
+                      { label: 'Record Payment', icon: FaHandHoldingUsd, type: 'recordPayment' },
+                      { label: 'Collections Due', icon: FaClock, type: 'dueCollections' },
+                      { label: 'Quick Invoice', icon: FaFileInvoiceDollar, type: 'quickInvoice' },
+                    ].map((a) => (
+                      <button
+                        key={a.type}
+                        type="button"
+                        onClick={() => {
+                          setActionsOpen(false);
+                          openModal(a.type);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                      >
+                        <a.icon size={13} className="text-muted" />
+                        {a.label}
+                      </button>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Mobile / tablet quick actions */}
+          <div className="relative lg:hidden" ref={mobileActionsRef}>
+            <button
+              onClick={() => setMobileActionsOpen((v) => !v)}
+              className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500"
+              title="Quick actions"
+            >
+              <FaPlus size={15} />
+            </button>
+            <AnimatePresence>
+              {mobileActionsOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  className="absolute right-0 top-full mt-2 w-56 bg-surface rounded-xl soft-shadow border border-border overflow-hidden py-1 z-50"
+                >
+                  {[
+                    { label: 'Record Payment', icon: FaHandHoldingUsd, type: 'recordPayment' },
+                    { label: 'Collections Due', icon: FaClock, type: 'dueCollections' },
+                    { label: 'Day Closing', icon: FaCalendarCheck, type: 'dayClosing' },
+                    { label: 'Quick Expense', icon: FaReceipt, type: 'quickExpense' },
+                    { label: 'Add Customer', icon: FaUserPlus, type: 'quickCustomer' },
+                    { label: 'Transaction', icon: FaPlus, type: 'quickTransaction' },
+                    { label: 'Create Invoice', icon: FaFileInvoiceDollar, type: 'invoiceFormat' },
+                  ].map((a) => (
+                    <button
+                      key={a.type}
+                      type="button"
+                      onClick={() => {
+                        setMobileActionsOpen(false);
+                        openModal(a.type);
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                    >
+                      <a.icon size={13} className="text-muted" />
+                      {a.label}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
           <button
             onClick={() => setCommandOpen(true)}
+            data-tour="command-palette"
             className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border dark:border-slate-600 text-xs text-muted hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             title="Command palette (Ctrl+K)"
           >
@@ -179,11 +311,19 @@ export default function Navbar() {
             <kbd className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-[10px] font-semibold">⌘K</kbd>
           </button>
           <button
-            onClick={toggleDarkMode}
+            onClick={handleThemeToggle}
             className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
             title="Toggle dark mode"
           >
             {darkMode ? <FaSun size={16} /> : <FaMoon size={16} />}
+          </button>
+
+          <button
+            onClick={() => startTour(true)}
+            className="hidden sm:flex p-2.5 rounded-xl hover:bg-primary/10 text-primary transition-colors"
+            title="Start website tour"
+          >
+            <FaQuestionCircle size={16} />
           </button>
 
           <Link
@@ -204,10 +344,12 @@ export default function Navbar() {
               onClick={() => setProfileOpen(!profileOpen)}
               className="flex items-center gap-2 p-1.5 pr-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             >
-              <Avatar name={user?.name || 'User'} src={profile?.logo || undefined} size="sm" />
-              <div className="hidden md:block text-left">
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-tight">{user?.name}</p>
-                <p className="text-[10px] text-muted">{user?.role}</p>
+              <Avatar name={shopName} src={profile?.logo || undefined} size="sm" rounded="xl" />
+              <div className="hidden md:block text-left min-w-0">
+                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 leading-tight truncate max-w-[140px]">
+                  {shopName}
+                </p>
+                <p className="text-[10px] text-muted truncate">{ownerName}</p>
               </div>
               <FaChevronDown size={10} className="text-slate-400 hidden md:block" />
             </button>
@@ -218,11 +360,15 @@ export default function Navbar() {
                   initial={{ opacity: 0, y: 4, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 4, scale: 0.95 }}
-                  className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-800 rounded-xl soft-shadow border border-border dark:border-slate-700 overflow-hidden py-1"
+                  className="absolute right-0 top-full mt-2 w-60 bg-surface dark:bg-surface rounded-xl soft-shadow border border-border dark:border-border overflow-hidden py-1"
                 >
-                  <div className="px-4 py-3 border-b border-border dark:border-slate-700">
-                    <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">{user?.name}</p>
-                    <p className="text-xs text-muted truncate">{user?.email}</p>
+                  <div className="px-4 py-3 border-b border-border dark:border-slate-700 flex items-center gap-3">
+                    <Avatar name={shopName} src={profile?.logo || undefined} size="md" rounded="xl" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{shopName}</p>
+                      <p className="text-xs text-muted truncate">{ownerName}</p>
+                      <p className="text-[10px] text-muted truncate">{user?.email || profile?.email}</p>
+                    </div>
                   </div>
                   <Link
                     to="/profile"
@@ -238,6 +384,16 @@ export default function Navbar() {
                   >
                     <FaCog size={13} /> Settings
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileOpen(false);
+                      startTour(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                  >
+                    <FaQuestionCircle size={13} /> Website Tour
+                  </button>
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-danger hover:bg-red-50 dark:hover:bg-red-900/20"

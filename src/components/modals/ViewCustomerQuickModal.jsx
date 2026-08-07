@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { FaPhone, FaBook, FaRupeeSign, FaFileInvoiceDollar, FaBell } from 'react-icons/fa';
+import { FaPhone, FaBook, FaRupeeSign, FaFileInvoiceDollar, FaBell, FaHandHoldingUsd } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useModal } from '../../context/ModalContext';
 import { formatCurrency, formatPhone } from '../../utils/formatters';
@@ -74,10 +74,23 @@ export default function ViewCustomerQuickModal() {
               size="sm"
               onClick={() => {
                 closeModal();
-                openModal('quickTransaction', { customerId: customer.id });
+                openModal('recordPayment', {
+                  customerId: customer.id,
+                  defaultAmount: customer.currentBalance,
+                });
               }}
             >
-              <FaRupeeSign size={11} /> Payment / Sale
+              <FaHandHoldingUsd size={11} /> Collect Payment
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                closeModal();
+                openModal('quickTransaction', { customerId: customer.id, type: 'credit' });
+              }}
+            >
+              <FaRupeeSign size={11} /> Credit Sale
             </Button>
             <Button
               variant="outline"
@@ -95,12 +108,13 @@ export default function ViewCustomerQuickModal() {
             <Button
               variant="outline"
               size="sm"
+              className="col-span-2"
               onClick={() => {
                 closeModal();
                 openModal('quickInvoice', { customerId: customer.id });
               }}
             >
-              <FaFileInvoiceDollar size={11} /> Invoice
+              <FaFileInvoiceDollar size={11} /> Quick Invoice
             </Button>
           </div>
         </div>

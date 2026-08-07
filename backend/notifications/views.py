@@ -155,3 +155,15 @@ class ActivityLogListView(APIView):
     def get(self, request):
         qs = ActivityLog.objects.filter(owner=request.user)[:50]
         return Response(ActivityLogSerializer(qs, many=True).data)
+
+    def post(self, request):
+        message = (request.data.get('message') or '').strip()
+        log_type = (request.data.get('type') or 'info').strip()[:50]
+        if not message:
+            return Response({'detail': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
+        row = ActivityLog.objects.create(
+            owner=request.user,
+            type=log_type or 'info',
+            message=message[:255],
+        )
+        return Response(ActivityLogSerializer(row).data, status=status.HTTP_201_CREATED)

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
 import { TRANSACTION_TYPES, PAYMENT_METHODS } from '../../utils/helpers';
+import { formatCurrency } from '../../utils/formatters';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import Dropdown from '../ui/Dropdown';
@@ -12,12 +13,12 @@ import Button from '../ui/Button';
 export default function QuickAddTransactionModal() {
   const { current, closeModal, openModal } = useModal();
   const open = current?.type === 'quickTransaction';
-  const { customers, addTransaction } = useApp();
+  const { customers, addTransaction, getCustomer } = useApp();
   const toast = useToast();
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
-    customerId: current?.payload?.customerId || '',
+    customerId: '',
     type: 'credit',
     itemDescription: '',
     quantity: '1',
@@ -28,6 +29,51 @@ export default function QuickAddTransactionModal() {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [forceOverLimit, setForceOverLimit] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setForm({
+      date: new Date().toISOString().split('T')[0],
+      customerId: current?.payload?.customerId || '',
+      type: current?.payload?.type || 'credit',
+      itemDescription: '',
+      quantity: '1',
+      rate: '',
+      amount: '',
+      paymentMethod: 'Cash',
+      notes: '',
+    });
+    setErrors({});
+    setForceOverLimit(false);
+  }, [open, current?.payload?.customerId, current?.payload?.type]);
+
+  const selectedCustomer = useMemo(
+    () => (form.customerId ? getCustomer(form.customerId) : null),
+    [form.customerId, getCustomer],
+  );
+
+  const creditWarning = useMemo(() => {
+    if (form.type !== 'credit' || !selectedCustomer) return null;
+    const limit = Number(selectedCustomer.creditLimit || 0);
+    if (limit <= 0) return null;
+    const bal = Number(selectedCustomer.currentBalance || 0);
+    const amt = Number(form.amount || 0);
+    const next = bal + amt;
+    if (amt <= 0) return null;
+    if (next > limit) {
+      return {
+        overBy: next - limit,
+        next,
+        limit,
+        bal,
+      };
+    }
+    if (next / limit >= 0.9) {
+      return { near: true, next, limit, bal, remaining: limit - next };
+    }
+    return null;
+  }, [form.type, form.amount, selectedCustomer]);
 
   if (!open) return null;
 
@@ -42,6 +88,7 @@ export default function QuickAddTransactionModal() {
       }
       return next;
     });
+    if (key === 'amount' || key === 'customerId' || key === 'type') setForceOverLimit(false);
   };
 
   const submit = async (e) => {
@@ -52,11 +99,17 @@ export default function QuickAddTransactionModal() {
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
+    if (creditWarning?.overBy && !forceOverLimit) {
+      toast.error(`Credit limit exceed hoga by ${formatCurrency(creditWarning.overBy)}. Confirm again to proceed.`);
+      setForceOverLimit(true);
+      return;
+    }
+
     setLoading(true);
     try {
       await addTransaction({
         date: form.date,
-        customerId: form.customerId || customers[0]?.id,
+        customerId: form.type === 'expense' ? null : (form.customerId || customers[0]?.id),
         type: form.type,
         itemDescription: form.itemDescription || TRANSACTION_TYPES[form.type]?.label,
         quantity: Number(form.quantity) || 1,
@@ -86,7 +139,9 @@ export default function QuickAddTransactionModal() {
             + New Customer
           </Button>
           <Button variant="outline" onClick={closeModal}>Cancel</Button>
-          <Button onClick={submit} loading={loading}>Save</Button>
+          <Button onClick={submit} loading={loading}>
+            {forceOverLimit && creditWarning?.overBy ? 'Confirm Over Limit' : 'Save'}
+          </Button>
         </>
       }
     >
@@ -130,6 +185,28 @@ export default function QuickAddTransactionModal() {
           onChange={set('paymentMethod')}
           options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
         />
+
+        {selectedCustomer && form.type !== 'expense' && (
+          <div className="sm:col-span-2 text-xs text-muted flex justify-between px-0.5">
+            <span>Current balance: {formatCurrency(selectedCustomer.currentBalance)}</span>
+            {Number(selectedCustomer.creditLimit) > 0 && (
+              <span>Limit: {formatCurrency(selectedCustomer.creditLimit)}</span>
+            )}
+          </div>
+        )}
+
+        {creditWarning?.overBy && (
+          <div className="sm:col-span-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 text-sm text-red-700 dark:text-red-300">
+            Credit limit ({formatCurrency(creditWarning.limit)}) exceed hoga.
+            New balance {formatCurrency(creditWarning.next)} — over by {formatCurrency(creditWarning.overBy)}.
+            {forceOverLimit ? ' Save again to confirm.' : ''}
+          </div>
+        )}
+        {creditWarning?.near && !creditWarning?.overBy && (
+          <div className="sm:col-span-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-200">
+            Limit ke near — sirf {formatCurrency(creditWarning.remaining)} remaining after this sale.
+          </div>
+        )}
       </form>
     </Modal>
   );

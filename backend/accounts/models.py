@@ -83,6 +83,7 @@ class BusinessSettings(models.Model):
     currency = models.CharField(max_length=10, default='INR')
     language = models.CharField(max_length=20, default='English')
     theme = models.CharField(max_length=10, default='light')
+    accent_color = models.CharField(max_length=20, default='blue')
     fiscal_year_start = models.CharField(max_length=2, default='04')
     default_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
     default_payment_terms = models.PositiveIntegerField(default=15)

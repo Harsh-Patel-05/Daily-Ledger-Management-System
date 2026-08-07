@@ -54,8 +54,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         notify_invoice_created(self.request.user, invoice)
 
     def perform_destroy(self, instance):
+        from transactions.models import Transaction
+
         customer = instance.customer
         number = instance.invoice_number
+        # Remove ledger rows created for this invoice so balance stays correct
+        Transaction.objects.filter(owner=self.request.user, invoice=instance).delete()
         instance.delete()
         if customer:
             customer.recalculate_balance()
@@ -119,7 +123,47 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='mark-paid')
     def mark_paid(self, request, pk=None):
+        """Mark invoice fully paid and sync a payment transaction to the ledger."""
+        from datetime import date as date_cls
+        from decimal import Decimal
+        from transactions.models import Transaction
+
         invoice = self.get_object()
-        invoice.paid_amount = invoice.total
-        invoice.recalculate_totals()
+        remaining = Decimal(str(invoice.balance or 0))
+        method = (
+            request.data.get('method')
+            or request.data.get('paymentMethod')
+            or invoice.payment_method
+            or 'Cash'
+        )
+        if method == 'Credit':
+            method = 'Cash'
+
+        if remaining > 0:
+            Transaction.objects.create(
+                owner=request.user,
+                customer=invoice.customer,
+                date=date_cls.today(),
+                type=Transaction.Type.PAYMENT,
+                item_description=f'Payment against {invoice.invoice_number}',
+                quantity=1,
+                rate=remaining,
+                amount=remaining,
+                notes=request.data.get('notes') or f'Marked paid — {invoice.invoice_number}',
+                payment_method=method,
+                invoice=invoice,
+            )
+            invoice.paid_amount = invoice.total
+            invoice.recalculate_totals()
+            if invoice.customer:
+                invoice.customer.recalculate_balance()
+            ActivityLog.objects.create(
+                owner=request.user,
+                type='payment',
+                message=f'Invoice marked paid: {invoice.invoice_number} · ₹{remaining}',
+            )
+        else:
+            invoice.paid_amount = invoice.total
+            invoice.recalculate_totals()
+
         return Response(InvoiceSerializer(invoice, context={'request': request}).data)

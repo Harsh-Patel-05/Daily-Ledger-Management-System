@@ -46,6 +46,16 @@ export async function listActivity() {
   }));
 }
 
+export async function createActivity({ message, type = 'info' }) {
+  const a = await api.post('/notifications/activity/', { message, type });
+  return {
+    id: a.id,
+    type: a.type,
+    message: a.message,
+    at: a.createdAt || a.created_at,
+  };
+}
+
 export async function sendReminder({ customerId, channel, message }) {
   return api.post('/notifications/send-reminder/', {
     customerId,

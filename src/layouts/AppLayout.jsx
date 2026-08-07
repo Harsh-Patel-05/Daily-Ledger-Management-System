@@ -1,17 +1,24 @@
 import { Outlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useEffect } from 'react';
 import Sidebar from '../components/layout/Sidebar';
 import Navbar from '../components/layout/Navbar';
 import CommandPalette from '../components/layout/CommandPalette';
 import { useApp } from '../context/AppContext';
+import { useTour } from '../context/TourContext';
 import { cn } from '../utils/formatters';
 import { PageLoader } from '../components/ui';
 
 export default function AppLayout() {
   const { sidebarCollapsed, dataLoading, dataReady, dataError, refreshAll } = useApp();
+  const { enableAutoStart } = useTour();
+
+  useEffect(() => {
+    if (dataReady) enableAutoStart();
+  }, [dataReady, enableAutoStart]);
 
   return (
-    <div className="min-h-screen bg-background dark:bg-slate-900">
+    <div className="min-h-screen bg-background">
       <Sidebar />
       <div
         className={cn(
@@ -26,7 +33,7 @@ export default function AppLayout() {
           ) : dataError && !dataReady ? (
             <div className="text-center py-20 space-y-3">
               <p className="text-red-600 font-medium">{dataError}</p>
-              <p className="text-sm text-muted">Is the Django API running on port 8001?</p>
+              <p className="text-sm text-muted">Is the Django API running on port 8000?</p>
               <button
                 type="button"
                 onClick={() => refreshAll()}

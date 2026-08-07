@@ -119,11 +119,80 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
+        """Day / period summary for Roj Mel (credit, collection, expense, by method)."""
         qs = self.filter_queryset(self.get_queryset())
-        credit = qs.filter(type='credit').aggregate(t=Sum('amount'))['t'] or 0
-        payment = qs.filter(type='payment').aggregate(t=Sum('amount'))['t'] or 0
+        date = request.query_params.get('date')
+        if date:
+            qs = qs.filter(date=date)
+
+        by_type = {}
+        for t in Transaction.Type.values:
+            by_type[t] = float(qs.filter(type=t).aggregate(s=Sum('amount'))['s'] or 0)
+
+        by_method = {}
+        payments = qs.filter(type=Transaction.Type.PAYMENT)
+        for m in Transaction.PaymentMethod.values:
+            by_method[m] = float(payments.filter(payment_method=m).aggregate(s=Sum('amount'))['s'] or 0)
+
         return Response({
+            'date': date,
             'count': qs.count(),
-            'credit': float(credit),
-            'payment': float(payment),
+            'credit': by_type.get('credit', 0),
+            'payment': by_type.get('payment', 0),
+            'return': by_type.get('return', 0),
+            'discount': by_type.get('discount', 0),
+            'expense': by_type.get('expense', 0),
+            'byType': by_type,
+            'byMethod': by_method,
+            'net': by_type.get('payment', 0) - by_type.get('expense', 0),
         })
+
+    @action(detail=False, methods=['post'], url_path='day-close')
+    def day_close(self, request):
+        """Persist day-closing note + return today's ledger summary."""
+        from datetime import date as date_cls
+
+        date_str = request.data.get('date') or date_cls.today().isoformat()
+        qs = self.get_queryset().filter(date=date_str)
+
+        by_type = {}
+        for t in Transaction.Type.values:
+            by_type[t] = float(qs.filter(type=t).aggregate(s=Sum('amount'))['s'] or 0)
+
+        by_method = {}
+        payments = qs.filter(type=Transaction.Type.PAYMENT)
+        for m in Transaction.PaymentMethod.values:
+            by_method[m] = float(payments.filter(payment_method=m).aggregate(s=Sum('amount'))['s'] or 0)
+
+        net = by_type.get('payment', 0) - by_type.get('expense', 0)
+        note = (
+            request.data.get('message')
+            or (
+                f'Day closing {date_str} · Collection ₹{by_type.get("payment", 0):.0f} · '
+                f'Credit ₹{by_type.get("credit", 0):.0f} · Expense ₹{by_type.get("expense", 0):.0f}'
+            )
+        )
+        activity = ActivityLog.objects.create(
+            owner=request.user,
+            type='day_close',
+            message=note[:255],
+        )
+
+        return Response({
+            'date': date_str,
+            'count': qs.count(),
+            'byType': by_type,
+            'byMethod': by_method,
+            'credit': by_type.get('credit', 0),
+            'payment': by_type.get('payment', 0),
+            'expense': by_type.get('expense', 0),
+            'return': by_type.get('return', 0),
+            'discount': by_type.get('discount', 0),
+            'net': net,
+            'activity': {
+                'id': activity.pk,
+                'type': activity.type,
+                'message': activity.message,
+                'createdAt': activity.created_at.isoformat(),
+            },
+        }, status=status.HTTP_201_CREATED)

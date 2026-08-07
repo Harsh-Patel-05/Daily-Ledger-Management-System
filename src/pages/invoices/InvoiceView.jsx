@@ -12,7 +12,7 @@ import { Breadcrumbs, Button, ConfirmationDialog } from '../../components/ui';
 
 export default function InvoiceView() {
   const { id } = useParams();
-  const { getInvoice, profile, deleteInvoice, addTransaction, duplicateInvoice, updateInvoice } = useApp();
+  const { getInvoice, profile, deleteInvoice, addTransaction, duplicateInvoice, updateInvoice, markInvoicePaid } = useApp();
   const toast = useToast();
   const navigate = useNavigate();
   const { openModal } = useModal();
@@ -20,6 +20,7 @@ export default function InvoiceView() {
   const [downloading, setDownloading] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showPay, setShowPay] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState(false);
   const [previewFormat, setPreviewFormat] = useState(null);
 
   const invoice = getInvoice(id);
@@ -78,6 +79,18 @@ export default function InvoiceView() {
     }
   };
 
+  const handleMarkPaid = async () => {
+    setMarkingPaid(true);
+    try {
+      await markInvoicePaid(id, { method: 'Cash' });
+      toast.success('Invoice marked paid — ledger updated');
+    } catch (err) {
+      toast.error(err.message || 'Failed to mark paid');
+    } finally {
+      setMarkingPaid(false);
+    }
+  };
+
   const activeFormat = previewFormat || invoice.format || 'classic';
   const fmt = getInvoiceFormat(activeFormat);
 
@@ -100,9 +113,14 @@ export default function InvoiceView() {
           </div>
           <div className="flex gap-2 flex-wrap">
             {invoice.balance > 0 && (
-              <Button size="sm" variant="secondary" onClick={() => setShowPay(true)}>
-                <FaRupeeSign size={12} /> Record Payment
-              </Button>
+              <>
+                <Button size="sm" variant="secondary" onClick={() => setShowPay(true)}>
+                  <FaRupeeSign size={12} /> Record Payment
+                </Button>
+                <Button size="sm" onClick={handleMarkPaid} loading={markingPaid}>
+                  Mark Paid
+                </Button>
+              </>
             )}
             <Button
               variant="outline"

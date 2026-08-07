@@ -6,6 +6,10 @@ import SendReminderModal from './SendReminderModal';
 import ShareInvoiceModal from './ShareInvoiceModal';
 import ViewCustomerQuickModal from './ViewCustomerQuickModal';
 import AdvancedFilterModal from './AdvancedFilterModal';
+import GlobalRecordPaymentModal from './GlobalRecordPaymentModal';
+import DueCollectionsModal from './DueCollectionsModal';
+import DayClosingModal from './DayClosingModal';
+import QuickExpenseModal from './QuickExpenseModal';
 
 /** Renders all global advanced modals — mount once inside ModalProvider */
 export default function GlobalModals() {
@@ -19,6 +23,10 @@ export default function GlobalModals() {
       <ShareInvoiceModal />
       <ViewCustomerQuickModal />
       <AdvancedFilterModal />
+      <GlobalRecordPaymentModal />
+      <DueCollectionsModal />
+      <DayClosingModal />
+      <QuickExpenseModal />
     </>
   );
 }

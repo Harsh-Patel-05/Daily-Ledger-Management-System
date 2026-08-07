@@ -43,7 +43,7 @@ export default function Modal({
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={cn(
-              'relative w-full bg-white dark:bg-slate-800 rounded-2xl soft-shadow border border-border dark:border-slate-700',
+              'relative w-full bg-surface dark:bg-surface rounded-2xl soft-shadow border border-border dark:border-border',
               sizes[size],
               className
             )}

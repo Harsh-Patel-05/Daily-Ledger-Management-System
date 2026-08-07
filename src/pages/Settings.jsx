@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { FaSave, FaDownload, FaUpload, FaUndo } from 'react-icons/fa';
+import { FaSave, FaDownload, FaUpload, FaUndo, FaCheck, FaRocket } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
+import { useTour } from '../context/TourContext';
 import { testOwnerAlert } from '../api/notifications';
 import { exportBackupJson } from '../utils/storage';
+import { ACCENT_PRESETS } from '../data/themePresets';
 import { Breadcrumbs, Card, CardHeader, Input, Dropdown, Button, ConfirmationDialog } from '../components/ui';
 
 export default function Settings() {
@@ -13,7 +15,8 @@ export default function Settings() {
     customers, transactions, invoices, notifications, activityLog,
     refreshFromServer,
   } = useApp();
-  const { setDarkMode } = useTheme();
+  const { applyFromSettings, mode, accent } = useTheme();
+  const { startTour } = useTour();
   const toast = useToast();
   const [form, setForm] = useState(settings);
   const [bank, setBank] = useState({
@@ -35,6 +38,8 @@ export default function Settings() {
       gstNumber: settings.gstNumber || profile.gst || '',
       businessName: settings.businessName || profile.shopName || '',
       invoicePrefix: settings.invoicePrefix || profile.invoicePrefix || 'INV',
+      accentColor: settings.accentColor || 'blue',
+      theme: settings.theme || 'light',
     }));
   }, [settings, profile]);
 
@@ -50,7 +55,16 @@ export default function Settings() {
 
   const set = (key) => (val) => {
     const value = typeof val === 'object' && val?.target ? val.target.value : val;
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => {
+      const next = { ...f, [key]: value };
+      if (key === 'theme' || key === 'accentColor') {
+        applyFromSettings({
+          theme: key === 'theme' ? value : next.theme,
+          accentColor: key === 'accentColor' ? value : next.accentColor,
+        });
+      }
+      return next;
+    });
   };
 
   const setNotif = (key) => (e) => {
@@ -71,8 +85,7 @@ export default function Settings() {
         gst: form.gstNumber,
         shopName: form.businessName,
       });
-      if (form.theme === 'dark') setDarkMode(true);
-      else if (form.theme === 'light') setDarkMode(false);
+      applyFromSettings(form);
       toast.success('Settings saved successfully');
     } catch (err) {
       toast.error(err.message || 'Failed to save settings');
@@ -130,6 +143,105 @@ export default function Settings() {
       </Card>
 
       <Card>
+        <CardHeader title="Appearance" subtitle="Mode aur color theme — select karte hi poora UI update hota hai" />
+        <div className="space-y-6">
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">Theme mode</p>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              {[
+                { value: 'light', label: 'Light' },
+                { value: 'dark', label: 'Dark' },
+                { value: 'system', label: 'System' },
+              ].map((opt) => {
+                const selected = (form.theme || mode) === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => set('theme')(opt.value)}
+                    className={`relative flex flex-col items-center gap-2 rounded-xl border-2 p-3 sm:p-4 transition-all ${
+                      selected
+                        ? 'border-primary bg-primary/5 dark:bg-primary/10'
+                        : 'border-border dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'
+                    }`}
+                  >
+                    <div
+                      className={`w-full h-10 rounded-lg overflow-hidden border border-border/60 dark:border-slate-600 ${
+                        opt.value === 'dark'
+                          ? 'bg-slate-800'
+                          : opt.value === 'system'
+                            ? 'bg-gradient-to-r from-slate-100 to-slate-800'
+                            : 'bg-slate-100'
+                      }`}
+                    >
+                      <div className={`h-2 mt-2 mx-2 rounded-full ${opt.value === 'dark' ? 'bg-slate-600' : 'bg-slate-300'} ${opt.value === 'system' ? 'opacity-70' : ''}`} />
+                      <div className={`h-1.5 mt-1.5 mx-2 w-2/3 rounded-full ${opt.value === 'dark' ? 'bg-slate-700' : 'bg-slate-200'}`} />
+                    </div>
+                    <span className={`text-sm font-medium ${selected ? 'text-primary' : 'text-slate-700 dark:text-slate-200'}`}>
+                      {opt.label}
+                    </span>
+                    {selected && (
+                      <span className="absolute top-2 right-2 w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center">
+                        <FaCheck size={10} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">Color theme</p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+              {ACCENT_PRESETS.map((preset) => {
+                const selected = (form.accentColor || accent) === preset.id;
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    title={preset.label}
+                    onClick={() => set('accentColor')(preset.id)}
+                    className={`relative flex flex-col overflow-hidden rounded-xl border-2 text-left transition-all ${
+                      selected
+                        ? 'border-primary ring-2 ring-primary/20 scale-[1.02]'
+                        : 'border-border dark:border-border hover:border-slate-300 dark:hover:border-slate-500'
+                    }`}
+                    aria-label={preset.label}
+                    aria-pressed={selected}
+                  >
+                    <div
+                      className="h-12 w-full"
+                      style={{
+                        background: `linear-gradient(135deg, ${preset.light.background} 0%, ${preset.primary} 55%, ${preset.primaryDark} 100%)`,
+                      }}
+                    />
+                    <div
+                      className="flex items-center justify-between gap-1 px-2.5 py-2"
+                      style={{ backgroundColor: preset.light.surface }}
+                    >
+                      <span className="text-xs font-semibold text-slate-700 truncate">{preset.label}</span>
+                      {selected && (
+                        <span
+                          className="w-4 h-4 rounded-full flex items-center justify-center text-white shrink-0"
+                          style={{ backgroundColor: preset.primary }}
+                        >
+                          <FaCheck size={8} />
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted mt-2">
+              Poora app is color ke hisaab se change hoga — background, cards, borders, buttons.
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      <Card>
         <CardHeader title="Preferences" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Dropdown
@@ -151,15 +263,6 @@ export default function Settings() {
               { value: 'Hindi', label: 'हिन्दी (Hindi)' },
               { value: 'Marathi', label: 'मराठी (Marathi)' },
               { value: 'Gujarati', label: 'ગુજરાતી (Gujarati)' },
-            ]}
-          />
-          <Dropdown
-            label="Theme"
-            value={form.theme}
-            onChange={set('theme')}
-            options={[
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
             ]}
           />
           <Dropdown
@@ -240,6 +343,26 @@ export default function Settings() {
           <p className="text-xs text-muted mt-2">
             Keys must be in <code className="px-1 rounded bg-slate-100 dark:bg-slate-700">backend/.env</code> (not .env.example), then restart Django.
           </p>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Help & Tour" subtitle="Replay the guided walkthrough anytime" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-sm text-slate-700 dark:text-slate-200 font-medium">Website guided tour</p>
+            <p className="text-xs text-muted mt-0.5">
+              A short walkthrough of the dashboard, customers, transactions, invoices, ledger, and quick actions.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => {
+              startTour(true);
+            }}
+          >
+            <FaRocket size={12} /> Start Tour
+          </Button>
         </div>
       </Card>
 

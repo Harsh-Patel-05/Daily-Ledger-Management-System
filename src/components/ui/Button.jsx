@@ -3,10 +3,10 @@ import { cn } from '../../utils/formatters';
 const variants = {
   primary: 'bg-primary hover:bg-primary-dark text-white shadow-sm',
   secondary: 'bg-secondary hover:bg-secondary-dark text-white shadow-sm',
-  outline: 'border border-border bg-white hover:bg-slate-50 text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700',
+  outline: 'border border-border bg-surface hover:bg-slate-50 text-slate-700 dark:bg-surface dark:border-border dark:text-slate-200 dark:hover:bg-slate-700',
   ghost: 'hover:bg-slate-100 text-slate-600 dark:hover:bg-slate-800 dark:text-slate-300',
   danger: 'bg-danger hover:bg-red-600 text-white shadow-sm',
-  soft: 'bg-blue-50 hover:bg-blue-100 text-primary dark:bg-blue-900/30 dark:hover:bg-blue-900/50 dark:text-blue-300',
+  soft: 'bg-primary-soft hover:bg-primary-soft-hover text-primary dark:text-primary-light',
 };
 
 const sizes = {

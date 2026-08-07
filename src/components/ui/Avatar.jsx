@@ -1,19 +1,28 @@
 import { cn, getInitials } from '../../utils/formatters';
+import { useState, useEffect } from 'react';
 
-export default function Avatar({ name, src, size = 'md', className = '' }) {
+export default function Avatar({ name, src, size = 'md', className = '', rounded = 'full' }) {
+  const [broken, setBroken] = useState(false);
   const sizes = {
     sm: 'h-8 w-8 text-xs',
     md: 'h-10 w-10 text-sm',
     lg: 'h-14 w-14 text-lg',
     xl: 'h-20 w-20 text-2xl',
   };
+  const radius = rounded === 'xl' ? 'rounded-xl' : 'rounded-full';
 
-  if (src) {
+  useEffect(() => {
+    setBroken(false);
+  }, [src]);
+
+  if (src && !broken) {
     return (
       <img
+        key={src}
         src={src}
-        alt={name}
-        className={cn('rounded-full object-cover', sizes[size], className)}
+        alt={name || 'Logo'}
+        onError={() => setBroken(true)}
+        className={cn(radius, 'object-cover bg-white shrink-0 border border-border/60', sizes[size], className)}
       />
     );
   }
@@ -21,8 +30,9 @@ export default function Avatar({ name, src, size = 'md', className = '' }) {
   return (
     <div
       className={cn(
-        'rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center shrink-0',
-        'dark:bg-primary/20 dark:text-blue-300',
+        radius,
+        'bg-primary/10 text-primary font-semibold flex items-center justify-center shrink-0',
+        'dark:bg-primary/20 dark:text-primary-light',
         sizes[size],
         className
       )}

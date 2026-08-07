@@ -25,6 +25,7 @@ export const emptySettings = {
   currency: 'INR',
   language: 'English',
   theme: 'light',
+  accentColor: 'blue',
   fiscalYearStart: '04',
   defaultTaxRate: 18,
   defaultPaymentTerms: 15,

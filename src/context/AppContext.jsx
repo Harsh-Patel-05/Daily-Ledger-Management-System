@@ -7,7 +7,14 @@ import {
   useEffect,
 } from 'react';
 import { useAuth } from './AuthContext';
+import { useTheme } from './ThemeContext';
 import { emptyProfile, emptySettings } from '../data/defaults';
+import {
+  readStoredBranding,
+  writeStoredBranding,
+  clearStoredBranding,
+  withNormalizedLogo,
+} from '../utils/branding';
 import * as customersApi from '../api/customers';
 import * as transactionsApi from '../api/transactions';
 import * as invoicesApi from '../api/invoices';
@@ -18,15 +25,22 @@ import { sameId } from '../api/ids';
 
 const AppContext = createContext(null);
 
+function initialProfile() {
+  const cached = readStoredBranding();
+  if (!cached) return emptyProfile;
+  return { ...emptyProfile, ...cached };
+}
+
 export function AppProvider({ children }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { applyFromSettings } = useTheme();
 
   const [customers, setCustomers] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [settings, setSettingsState] = useState(emptySettings);
-  const [profile, setProfileState] = useState(emptyProfile);
+  const [profile, setProfileState] = useState(initialProfile);
   const [activityLog, setActivityLog] = useState([]);
   const [dashboardExtra, setDashboardExtra] = useState(null);
   const [analyticsData, setAnalyticsData] = useState(null);
@@ -40,6 +54,13 @@ export function AppProvider({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
 
+  const applyProfile = useCallback((prof) => {
+    const next = withNormalizedLogo({ ...emptyProfile, ...prof });
+    setProfileState(next);
+    writeStoredBranding(next);
+    return next;
+  }, []);
+
   const clearLocal = useCallback(() => {
     setCustomers([]);
     setTransactions([]);
@@ -47,6 +68,7 @@ export function AppProvider({ children }) {
     setInvoices([]);
     setSettingsState(emptySettings);
     setProfileState(emptyProfile);
+    clearStoredBranding();
     setActivityLog([]);
     setDashboardExtra(null);
     setAnalyticsData(null);
@@ -89,14 +111,17 @@ export function AppProvider({ children }) {
       setInvoices(invs);
       setNotifications(notifs);
       setActivityLog(activity);
-      setProfileState({ ...emptyProfile, ...prof });
-      setSettingsState({
+      applyProfile(prof);
+      const nextSettings = {
         ...emptySettings,
         ...sett,
         gstNumber: sett.gstNumber || prof.gst || '',
         businessName: sett.businessName || prof.shopName || '',
         invoicePrefix: sett.invoicePrefix || prof.invoicePrefix || emptySettings.invoicePrefix,
-      });
+        accentColor: sett.accentColor || emptySettings.accentColor,
+      };
+      setSettingsState(nextSettings);
+      applyFromSettings(nextSettings);
       setDashboardExtra(dash);
       setAnalyticsData(analytics);
       setReportsData(reports);
@@ -107,7 +132,7 @@ export function AppProvider({ children }) {
     } finally {
       setDataLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, applyFromSettings, applyProfile]);
 
   useEffect(() => {
     if (authLoading) return;
@@ -130,12 +155,38 @@ export function AppProvider({ children }) {
     return txns;
   }, []);
 
+  const refreshDashboard = useCallback(async () => {
+    try {
+      const [dash, analytics, reports] = await Promise.all([
+        coreApi.getDashboard().catch(() => null),
+        coreApi.getAnalytics(6).catch(() => null),
+        coreApi.getReports().catch(() => null),
+      ]);
+      if (dash) setDashboardExtra(dash);
+      if (analytics) setAnalyticsData(analytics);
+      if (reports) setReportsData(reports);
+    } catch {
+      // non-blocking
+    }
+  }, []);
+
   const logActivity = useCallback((message, type = 'info') => {
     setActivityLog((prev) => [
       { id: `local_${Date.now()}`, type, message, at: new Date().toISOString() },
       ...prev,
     ].slice(0, 100));
   }, []);
+
+  const persistActivity = useCallback(async (message, type = 'info') => {
+    try {
+      const row = await notificationsApi.createActivity({ message, type });
+      setActivityLog((prev) => [row, ...prev].slice(0, 100));
+      return row;
+    } catch {
+      logActivity(message, type);
+      return null;
+    }
+  }, [logActivity]);
 
   const addCustomer = useCallback(async (data) => {
     const created = await customersApi.createCustomer(data);
@@ -166,10 +217,17 @@ export function AppProvider({ children }) {
   const addTransaction = useCallback(async (data) => {
     const created = await transactionsApi.createTransaction(data);
     setTransactions((prev) => [created, ...prev]);
-    await refreshCustomers();
+    await Promise.all([refreshCustomers(), refreshDashboard()]);
     logActivity(`Transaction: ${data.type} ₹${data.amount}`, 'transaction');
     return created;
-  }, [refreshCustomers, logActivity]);
+  }, [refreshCustomers, refreshDashboard, logActivity]);
+
+  const deleteTransaction = useCallback(async (id) => {
+    await transactionsApi.deleteTransaction(id);
+    setTransactions((prev) => prev.filter((t) => !sameId(t.id, id)));
+    await Promise.all([refreshCustomers(), refreshDashboard()]);
+    logActivity('Transaction deleted', 'transaction');
+  }, [refreshCustomers, refreshDashboard, logActivity]);
 
   const getCustomerTransactions = useCallback(
     (customerId) => transactions.filter((t) => sameId(t.customerId, customerId)),
@@ -189,18 +247,36 @@ export function AppProvider({ children }) {
       invoiceId,
     });
     setTransactions((prev) => [tx, ...prev]);
-    await Promise.all([refreshCustomers(), invoicesApi.listInvoices().then(setInvoices)]);
+    await Promise.all([
+      refreshCustomers(),
+      invoicesApi.listInvoices().then(setInvoices),
+      refreshDashboard(),
+    ]);
     logActivity(`Payment recorded: ₹${amt}`, 'payment');
     return tx;
-  }, [refreshCustomers, logActivity]);
+  }, [refreshCustomers, refreshDashboard, logActivity]);
+
+  const closeDay = useCallback(async (payload = {}) => {
+    const result = await transactionsApi.dayClose(payload);
+    if (result?.activity) {
+      setActivityLog((prev) => [{
+        id: result.activity.id,
+        type: result.activity.type,
+        message: result.activity.message,
+        at: result.activity.createdAt,
+      }, ...prev].slice(0, 100));
+    }
+    await refreshDashboard();
+    return result;
+  }, [refreshDashboard]);
 
   const addInvoice = useCallback(async (data) => {
     const created = await invoicesApi.createInvoice(data);
     setInvoices((prev) => [created, ...prev]);
-    await Promise.all([refreshCustomers(), refreshTransactions()]);
+    await Promise.all([refreshCustomers(), refreshTransactions(), refreshDashboard()]);
     logActivity(`Invoice created: ${created.invoiceNumber}`, 'invoice');
     return created;
-  }, [refreshCustomers, refreshTransactions, logActivity]);
+  }, [refreshCustomers, refreshTransactions, refreshDashboard, logActivity]);
 
   const updateInvoice = useCallback(async (id, data) => {
     const updated = await invoicesApi.updateInvoice(id, data);
@@ -211,9 +287,9 @@ export function AppProvider({ children }) {
   const deleteInvoice = useCallback(async (id) => {
     await invoicesApi.deleteInvoice(id);
     setInvoices((prev) => prev.filter((i) => !sameId(i.id, id)));
-    await refreshCustomers();
+    await Promise.all([refreshCustomers(), refreshTransactions(), refreshDashboard()]);
     logActivity('Invoice deleted', 'invoice');
-  }, [refreshCustomers, logActivity]);
+  }, [refreshCustomers, refreshTransactions, refreshDashboard, logActivity]);
 
   const duplicateInvoice = useCallback(async (id) => {
     const created = await invoicesApi.duplicateInvoice(id);
@@ -221,6 +297,14 @@ export function AppProvider({ children }) {
     logActivity(`Invoice duplicated: ${created.invoiceNumber}`, 'invoice');
     return created;
   }, [logActivity]);
+
+  const markInvoicePaid = useCallback(async (id, extra = {}) => {
+    const updated = await invoicesApi.markInvoicePaid(id, extra);
+    setInvoices((prev) => prev.map((inv) => (sameId(inv.id, id) ? updated : inv)));
+    await Promise.all([refreshCustomers(), refreshTransactions(), refreshDashboard()]);
+    logActivity(`Invoice marked paid: ${updated.invoiceNumber || id}`, 'payment');
+    return updated;
+  }, [refreshCustomers, refreshTransactions, refreshDashboard, logActivity]);
 
   const getInvoice = useCallback(
     (id) => invoices.find((i) => sameId(i.id, id)),
@@ -287,7 +371,7 @@ export function AppProvider({ children }) {
 
   const setProfile = useCallback(async (next) => {
     const value = typeof next === 'function' ? next(profile) : next;
-    setProfileState(value);
+    applyProfile(value);
     try {
       const { logo, ...rest } = value;
       const payload = { ...rest };
@@ -298,7 +382,7 @@ export function AppProvider({ children }) {
         // keep URL as-is; backend ignores unknown read-only
       }
       const saved = await authApi.updateProfile(payload);
-      setProfileState((prev) => ({ ...prev, ...saved }));
+      applyProfile({ ...value, ...saved });
       setSettingsState((prev) => ({
         ...prev,
         gstNumber: saved.gst ?? prev.gstNumber,
@@ -307,16 +391,16 @@ export function AppProvider({ children }) {
       }));
       return saved;
     } catch (err) {
-      setProfileState(profile);
+      applyProfile(profile);
       throw err;
     }
-  }, [profile]);
+  }, [profile, applyProfile]);
 
   const uploadLogo = useCallback(async (file) => {
     const saved = await authApi.updateProfileLogo(file);
-    setProfileState((prev) => ({ ...prev, ...saved }));
+    applyProfile({ ...profile, ...saved });
     return saved;
-  }, []);
+  }, [profile, applyProfile]);
 
   const restoreBackup = useCallback(() => {
     throw new Error('Backup restore is local-only. Use API seed or re-enter data.');
@@ -422,19 +506,24 @@ export function AppProvider({ children }) {
     deleteCustomer,
     getCustomer,
     addTransaction,
+    deleteTransaction,
     getCustomerTransactions,
     recordPayment,
+    closeDay,
     addInvoice,
     updateInvoice,
     deleteInvoice,
     duplicateInvoice,
+    markInvoicePaid,
     getInvoice,
     importInvoiceAsTransaction,
     restoreBackup,
     refreshFromServer,
     resetDemoData: refreshFromServer,
     refreshAll,
+    refreshDashboard,
     logActivity,
+    persistActivity,
     markNotificationRead,
     markAllNotificationsRead,
     refreshNotifications,

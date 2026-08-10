@@ -11,7 +11,7 @@ import {
   FaFileAlt,
   FaBook,
   FaFileInvoiceDollar,
-  FaUpload,
+  FaBoxes,
 } from 'react-icons/fa';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -20,6 +20,7 @@ import {
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useInventory } from '../context/InventoryContext';
 import { useModal } from '../context/ModalContext';
 import {
   monthlyTrendFromAnalytics,
@@ -29,7 +30,7 @@ import StatCard from '../components/ui/StatCard';
 import Card, { CardHeader } from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
-import { formatCurrency, formatDate } from '../utils/formatters';
+import { formatCurrency, formatDate, formatNumber } from '../utils/formatters';
 import { TRANSACTION_TYPES } from '../utils/helpers';
 
 const container = {
@@ -42,11 +43,13 @@ const item = {
 };
 
 export default function Dashboard() {
-  const { stats, transactions, notifications, activityLog, invoices, analyticsData, reportsData } = useApp();
+  const { stats, transactions, notifications, invoices, analyticsData, reportsData } = useApp();
+  const { stats: invStats } = useInventory();
   const { openModal } = useModal();
   const recentTxs = transactions.slice(0, 6);
   const recentActivity = notifications.slice(0, 5);
   const unpaidInvoices = invoices.filter((i) => i.status !== 'paid').slice(0, 5);
+  const stockAlerts = [...invStats.outOfStockItems, ...invStats.lowStockItems].slice(0, 5);
 
   const chartMonthly = useMemo(
     () => monthlyTrendFromAnalytics(analyticsData),
@@ -77,8 +80,8 @@ export default function Dashboard() {
           <Link to="/invoices/create">
             <Button size="sm" variant="outline"><FaFileInvoiceDollar size={12} /> Create Invoice</Button>
           </Link>
-          <Link to="/transactions/add">
-            <Button size="sm" variant="outline"><FaPlus size={12} /> New Transaction</Button>
+          <Link to="/purchase/bills">
+            <Button size="sm" variant="outline"><FaPlus size={12} /> Purchase Bill</Button>
           </Link>
           <Link to="/customers/add">
             <Button size="sm" variant="outline"><FaUserPlus size={12} /> Add Customer</Button>
@@ -95,6 +98,8 @@ export default function Dashboard() {
         <StatCard title="Transactions" value={String(stats.totalTransactions)} icon={FaExchangeAlt} color="slate" />
         <StatCard title="Unpaid Invoices" value={String(stats.unpaidInvoices)} icon={FaCreditCard} color="purple" />
         <StatCard title="Overdue Customers" value={String(stats.overdueCustomers)} icon={FaClock} color="amber" />
+        <StatCard title="Stock Value" value={invStats.stockValue} icon={FaBoxes} color="green" />
+        <StatCard title="Low / Out of Stock" value={String(invStats.lowStock + invStats.outOfStock)} icon={FaBoxes} color="red" />
       </motion.div>
 
       <motion.div variants={item} className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -164,8 +169,8 @@ export default function Dashboard() {
           <div className="grid grid-cols-2 gap-3">
             {[
               { to: '/invoices/create', icon: FaFileInvoiceDollar, label: 'Invoice', color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30' },
-              { to: '/invoices/upload', icon: FaUpload, label: 'Upload Inv.', color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30' },
-              { to: '/ledger', icon: FaBook, label: 'View Ledger', color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30' },
+              { to: '/inventory/products', icon: FaBoxes, label: 'Inventory', color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30' },
+              { to: '/ledger/party', icon: FaBook, label: 'View Ledger', color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30' },
               { to: '/reports', icon: FaFileAlt, label: 'Reports', color: 'bg-purple-50 text-purple-600 dark:bg-purple-900/30' },
             ].map((a) => (
               <Link
@@ -185,7 +190,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader
             title="Unpaid Invoices"
-            action={<Link to="/invoices" className="text-xs text-primary font-medium hover:underline">View all</Link>}
+            action={<Link to="/sales/invoices" className="text-xs text-primary font-medium hover:underline">View all</Link>}
           />
           <div className="space-y-3">
             {unpaidInvoices.length === 0 ? (
@@ -212,19 +217,39 @@ export default function Dashboard() {
         </Card>
 
         <Card>
-          <CardHeader title="Activity Log" />
+          <CardHeader
+            title="Stock Alerts"
+            action={
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openModal('quickStock')}
+                  className="text-xs text-primary font-medium hover:underline"
+                >
+                  Adjust
+                </button>
+                <Link to="/inventory/low-stock" className="text-xs text-primary font-medium hover:underline">View all</Link>
+              </div>
+            }
+          />
           <div className="space-y-3 max-h-64 overflow-y-auto scrollbar-thin">
-            {activityLog.length === 0 ? (
-              <p className="text-sm text-muted text-center py-6">No activity yet</p>
+            {stockAlerts.length === 0 ? (
+              <p className="text-sm text-muted text-center py-6">All products healthy</p>
             ) : (
-              activityLog.slice(0, 8).map((a) => (
-                <div key={a.id} className="flex gap-3 items-start">
-                  <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-primary" />
+              stockAlerts.map((p) => (
+                <Link
+                  key={p.id}
+                  to={`/inventory/${p.id}`}
+                  className="flex items-center justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-700/40 rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+                >
                   <div className="min-w-0">
-                    <p className="text-sm text-slate-700 dark:text-slate-200">{a.message}</p>
-                    <p className="text-[10px] text-muted">{formatDate(a.at)}</p>
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{p.name}</p>
+                    <p className="text-xs text-muted">Reorder at {formatNumber(p.reorderLevel)}</p>
                   </div>
-                </div>
+                  <Badge variant={Number(p.stockQty) <= 0 ? 'danger' : 'warning'}>
+                    {Number(p.stockQty) <= 0 ? 'Out' : `${formatNumber(p.stockQty)} left`}
+                  </Badge>
+                </Link>
               ))
             )}
           </div>

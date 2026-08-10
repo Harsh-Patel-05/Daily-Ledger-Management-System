@@ -5,8 +5,10 @@ import {
   FaSearch, FaTachometerAlt, FaUsers, FaExchangeAlt, FaFileInvoiceDollar,
   FaBook, FaChartBar, FaChartPie, FaBell, FaCog, FaUser, FaPlus, FaUpload,
   FaMoon, FaSun, FaKeyboard, FaHandHoldingUsd, FaClock, FaCalendarCheck, FaReceipt, FaRocket,
+  FaBoxes, FaTags, FaTruck,
 } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
+import { useInventory } from '../../context/InventoryContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useModal } from '../../context/ModalContext';
 import { useTour } from '../../context/TourContext';
@@ -14,19 +16,30 @@ import { cn } from '../../utils/formatters';
 
 const navCommands = [
   { id: 'dash', label: 'Go to Dashboard', icon: FaTachometerAlt, to: '/dashboard', group: 'Navigate' },
-  { id: 'cust', label: 'Customers', icon: FaUsers, to: '/customers', group: 'Navigate' },
-  { id: 'txn', label: 'Transactions', icon: FaExchangeAlt, to: '/transactions', group: 'Navigate' },
-  { id: 'inv', label: 'Invoices', icon: FaFileInvoiceDollar, to: '/invoices', group: 'Navigate' },
-  { id: 'led', label: 'Ledger', icon: FaBook, to: '/ledger', group: 'Navigate' },
+  { id: 'cust', label: 'Customers', icon: FaUsers, to: '/parties/customers', group: 'Navigate' },
+  { id: 'sup', label: 'Suppliers', icon: FaTruck, to: '/parties/suppliers', group: 'Navigate' },
+  { id: 'out', label: 'Outstanding', icon: FaClock, to: '/parties/outstanding', group: 'Navigate' },
+  { id: 'invt', label: 'Products', icon: FaBoxes, to: '/inventory/products', group: 'Navigate' },
+  { id: 'invt-cat', label: 'Categories', icon: FaTags, to: '/inventory/categories', group: 'Navigate' },
+  { id: 'invt-stk', label: 'Stock', icon: FaExchangeAlt, to: '/inventory/stock', group: 'Navigate' },
+  { id: 'inv', label: 'Sales Invoices', icon: FaFileInvoiceDollar, to: '/sales/invoices', group: 'Navigate' },
+  { id: 'pur', label: 'Purchase Bills', icon: FaFileInvoiceDollar, to: '/purchase/bills', group: 'Navigate' },
+  { id: 'payin', label: 'Payment In', icon: FaHandHoldingUsd, to: '/payments/in', group: 'Navigate' },
+  { id: 'led', label: 'Party Ledger', icon: FaBook, to: '/ledger/party', group: 'Navigate' },
+  { id: 'exp', label: 'Expenses', icon: FaReceipt, to: '/expenses', group: 'Navigate' },
+  { id: 'gst', label: 'GST Dashboard', icon: FaChartBar, to: '/gst', group: 'Navigate' },
   { id: 'rep', label: 'Reports', icon: FaChartBar, to: '/reports', group: 'Navigate' },
+  { id: 'users', label: 'Users', icon: FaUsers, to: '/users', group: 'Navigate' },
+  { id: 'txn', label: 'Transactions', icon: FaExchangeAlt, to: '/transactions', group: 'Navigate' },
   { id: 'ana', label: 'Analytics', icon: FaChartPie, to: '/analytics', group: 'Navigate' },
   { id: 'not', label: 'Notifications', icon: FaBell, to: '/notifications', group: 'Navigate' },
   { id: 'pro', label: 'Profile', icon: FaUser, to: '/profile', group: 'Navigate' },
-  { id: 'set', label: 'Settings', icon: FaCog, to: '/settings', group: 'Navigate' },
+  { id: 'set', label: 'Settings', icon: FaCog, to: '/settings/business', group: 'Navigate' },
 ];
 
 export default function CommandPalette() {
   const { commandOpen, setCommandOpen, customers, invoices, settings, setSettings } = useApp();
+  const { products } = useInventory();
   const { darkMode, toggleDarkMode } = useTheme();
   const { openModal } = useModal();
   const { startTour } = useTour();
@@ -109,18 +122,25 @@ export default function CommandPalette() {
         action: () => openModal('quickTransaction'),
       },
       {
-        id: 'q-inv-fmt',
-        label: 'Choose Invoice Format',
-        icon: FaFileInvoiceDollar,
-        group: 'Actions',
-        action: () => openModal('invoiceFormat'),
-      },
-      {
         id: 'q-inv',
         label: 'Quick Create Invoice',
         icon: FaFileInvoiceDollar,
         group: 'Actions',
         action: () => openModal('quickInvoice'),
+      },
+      {
+        id: 'q-prod',
+        label: 'Add Product',
+        icon: FaBoxes,
+        to: '/inventory/add',
+        group: 'Actions',
+      },
+      {
+        id: 'q-stock',
+        label: 'Record Stock Movement',
+        icon: FaExchangeAlt,
+        group: 'Actions',
+        action: () => openModal('quickStock'),
       },
       {
         id: 'up-inv',
@@ -159,6 +179,14 @@ export default function CommandPalette() {
         to: `/invoices/${i.id}`,
         group: 'Invoices',
       })),
+      ...products.filter((p) => p.status === 'active').slice(0, 8).map((p) => ({
+        id: `p-${p.id}`,
+        label: p.name,
+        sub: `${p.sku || 'No SKU'} · stock ${p.stockQty}`,
+        icon: FaBoxes,
+        to: `/inventory/${p.id}`,
+        group: 'Products',
+      })),
     ];
 
     if (!query.trim()) return dynamic;
@@ -169,7 +197,7 @@ export default function CommandPalette() {
         c.sub?.toLowerCase().includes(q) ||
         c.group?.toLowerCase().includes(q)
     );
-  }, [query, customers, invoices, darkMode, handleThemeToggle, openModal, startTour]);
+  }, [query, customers, invoices, products, darkMode, handleThemeToggle, openModal, startTour]);
 
   useEffect(() => setIndex(0), [query]);
 
@@ -217,7 +245,7 @@ export default function CommandPalette() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onKeyDown}
-                placeholder="Search pages, customers, invoices, actions…"
+                placeholder="Search pages, customers, invoices, products…"
                 className="flex-1 py-4 bg-transparent text-sm outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400"
               />
               <kbd className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-muted font-medium">ESC</kbd>

@@ -103,6 +103,13 @@ class Invoice(models.Model):
 
 class InvoiceItem(models.Model):
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(
+        'inventory.Product',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='invoice_items',
+    )
     description = models.CharField(max_length=255)
     hsn = models.CharField(max_length=20, blank=True)
     quantity = models.DecimalField(max_digits=12, decimal_places=2, default=1)
@@ -119,3 +126,38 @@ class InvoiceItem(models.Model):
     def save(self, *args, **kwargs):
         self.amount = (self.quantity or 0) * (self.rate or 0)
         super().save(*args, **kwargs)
+
+
+class SalesReturn(models.Model):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sales_returns',
+    )
+    customer = models.ForeignKey(
+        'customers.Customer',
+        on_delete=models.PROTECT,
+        related_name='sales_returns',
+    )
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sales_returns',
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    date = models.DateField()
+    reason = models.TextField(blank=True)
+    gst_applicable = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date', '-created_at']
+        indexes = [
+            models.Index(fields=['owner', 'date']),
+            models.Index(fields=['owner', 'customer']),
+        ]
+
+    def __str__(self):
+        return f'Return · {self.amount} · {self.date}'

@@ -10,24 +10,27 @@ import {
   FaArrowRight,
 } from 'react-icons/fa';
 import { useTour } from '../../context/TourContext';
+import { useApp } from '../../context/AppContext';
 import Button from '../ui/Button';
 
 const PAD = 8;
 
 function getTargetRect(targetId) {
   if (!targetId) return null;
-  const el = document.querySelector(`[data-tour="${targetId}"]`);
-  if (!el) return null;
-  const r = el.getBoundingClientRect();
-  if (r.width === 0 && r.height === 0) return null;
-  return {
-    top: r.top - PAD,
-    left: r.left - PAD,
-    width: r.width + PAD * 2,
-    height: r.height + PAD * 2,
-    bottom: r.bottom + PAD,
-    right: r.right + PAD,
-  };
+  const nodes = document.querySelectorAll(`[data-tour="${targetId}"]`);
+  for (const el of nodes) {
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) continue;
+    return {
+      top: r.top - PAD,
+      left: r.left - PAD,
+      width: r.width + PAD * 2,
+      height: r.height + PAD * 2,
+      bottom: r.bottom + PAD,
+      right: r.right + PAD,
+    };
+  }
+  return null;
 }
 
 function tooltipStyle(rect, placement, cardW = 360, cardH = 220) {
@@ -166,7 +169,7 @@ function CenterTourCard({ step, stepIndex, total, isFirst, isLast, next, prev, s
                 Skip for now
               </button>
             ) : (
-              <span className="text-xs text-muted">You can replay this anytime</span>
+              <span className="text-xs text-muted">Replay anytime from Settings or ?</span>
             )}
 
             <div className="flex gap-2">
@@ -178,9 +181,13 @@ function CenterTourCard({ step, stepIndex, total, isFirst, isLast, next, prev, s
               <Button size="sm" onClick={next} className="min-w-[7.5rem]">
                 {isFinish ? (
                   <>Got it</>
-                ) : (
+                ) : isFirst ? (
                   <>
                     Start tour <FaArrowRight size={11} />
+                  </>
+                ) : (
+                  <>
+                    Next <FaArrowRight size={11} />
                   </>
                 )}
               </Button>
@@ -259,6 +266,7 @@ function SpotlightTourCard({
 
 export default function ProductTour() {
   const { active, step, stepIndex, total, next, prev, skip } = useTour();
+  const { setSidebarOpen, sidebarCollapsed, setSidebarCollapsed } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [rect, setRect] = useState(null);
@@ -269,19 +277,49 @@ export default function ProductTour() {
       setRect(null);
       return;
     }
+    const nodes = document.querySelectorAll(`[data-tour="${step.target}"]`);
+    for (const el of nodes) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'auto' });
+        break;
+      }
+    }
     setRect(getTargetRect(step.target));
   }, [step]);
 
   useEffect(() => {
+    if (!active || !step?.openSection) return;
+    window.dispatchEvent(
+      new CustomEvent('dlms-tour-expand', { detail: { sectionId: step.openSection } })
+    );
+  }, [active, step?.id, step?.openSection]);
+
+  // Ensure sidebar targets are visible during tour
+  useEffect(() => {
+    if (!active || !step) return;
+    const needsSidebar =
+      step.target === 'sidebar'
+      || (step.target && String(step.target).startsWith('nav-'));
+    if (!needsSidebar) return;
+    setSidebarOpen(true);
+    if (sidebarCollapsed) setSidebarCollapsed(false);
+  }, [active, step?.id, step?.target, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed]);
+
+  useEffect(() => {
     if (!active || !step?.route) return;
-    if (location.pathname !== step.route) {
-      navigate(step.route);
+    const route = step.route;
+    const matched =
+      location.pathname === route
+      || (route !== '/dashboard' && location.pathname.startsWith(route));
+    if (!matched) {
+      navigate(route);
     }
   }, [active, step?.route, step?.id, navigate, location.pathname]);
 
   useLayoutEffect(() => {
     if (!active) return;
-    const t = setTimeout(measure, 80);
+    const t = setTimeout(measure, step?.openSection ? 260 : 100);
     return () => clearTimeout(t);
   }, [active, step, location.pathname, measure, tick]);
 

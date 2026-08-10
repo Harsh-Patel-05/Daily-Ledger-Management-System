@@ -22,6 +22,7 @@ import * as notificationsApi from '../api/notifications';
 import * as authApi from '../api/auth';
 import * as coreApi from '../api/core';
 import { sameId } from '../api/ids';
+import { requestInventoryRefresh } from './InventoryContext';
 
 const AppContext = createContext(null);
 
@@ -119,6 +120,7 @@ export function AppProvider({ children }) {
         businessName: sett.businessName || prof.shopName || '',
         invoicePrefix: sett.invoicePrefix || prof.invoicePrefix || emptySettings.invoicePrefix,
         accentColor: sett.accentColor || emptySettings.accentColor,
+        lowStockAlert: sett.lowStockAlert ?? emptySettings.lowStockAlert,
       };
       setSettingsState(nextSettings);
       applyFromSettings(nextSettings);
@@ -129,6 +131,7 @@ export function AppProvider({ children }) {
     } catch (err) {
       console.error(err);
       setDataError(err.message || 'Failed to load data');
+      setDataReady(true); // soft-fail so local modules still render
     } finally {
       setDataLoading(false);
     }
@@ -408,6 +411,7 @@ export function AppProvider({ children }) {
 
   const refreshFromServer = useCallback(async () => {
     await refreshAll();
+    requestInventoryRefresh();
     logActivity('Data refreshed from server', 'system');
   }, [refreshAll, logActivity]);
 

@@ -125,7 +125,7 @@ export default function CustomerList() {
 
   return (
     <div className="space-y-4">
-      <Breadcrumbs items={[{ label: 'Customers' }]} />
+      <Breadcrumbs items={[{ label: 'Parties', to: '/parties/customers' }, { label: 'Customers' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Customers</h1>

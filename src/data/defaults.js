@@ -29,7 +29,7 @@ export const emptySettings = {
   fiscalYearStart: '04',
   defaultTaxRate: 18,
   defaultPaymentTerms: 15,
-  lowStockAlert: false,
+  lowStockAlert: true,
   autoBackup: true,
   compactTables: false,
   showAmountInWords: true,

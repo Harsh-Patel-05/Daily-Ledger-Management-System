@@ -1,4 +1,3 @@
-import InvoiceFormatPickerModal from './InvoiceFormatPickerModal';
 import QuickAddCustomerModal from './QuickAddCustomerModal';
 import QuickAddTransactionModal from './QuickAddTransactionModal';
 import QuickCreateInvoiceModal from './QuickCreateInvoiceModal';
@@ -10,12 +9,12 @@ import GlobalRecordPaymentModal from './GlobalRecordPaymentModal';
 import DueCollectionsModal from './DueCollectionsModal';
 import DayClosingModal from './DayClosingModal';
 import QuickExpenseModal from './QuickExpenseModal';
+import QuickStockModal from './QuickStockModal';
 
 /** Renders all global advanced modals — mount once inside ModalProvider */
 export default function GlobalModals() {
   return (
     <>
-      <InvoiceFormatPickerModal />
       <QuickAddCustomerModal />
       <QuickAddTransactionModal />
       <QuickCreateInvoiceModal />
@@ -27,6 +26,7 @@ export default function GlobalModals() {
       <DueCollectionsModal />
       <DayClosingModal />
       <QuickExpenseModal />
+      <QuickStockModal />
     </>
   );
 }

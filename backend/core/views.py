@@ -7,6 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.ownership import data_owner
 from customers.models import Customer
 from transactions.models import Transaction
 from invoices.models import Invoice
@@ -17,7 +18,7 @@ class DashboardView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        user = data_owner(request.user)
         today = date.today()
         month_start = today.replace(day=1)
 
@@ -103,7 +104,7 @@ class LedgerView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        user = data_owner(request.user)
         customer_raw = request.query_params.get('customerId') or request.query_params.get('customer')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
@@ -181,7 +182,7 @@ class ReportsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        user = data_owner(request.user)
         report_type = request.query_params.get('type', 'summary')
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
@@ -268,7 +269,7 @@ class AnalyticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        user = data_owner(request.user)
         today = date.today()
         months_back = int(request.query_params.get('months', 6))
         start = (today.replace(day=1) - timedelta(days=months_back * 30)).replace(day=1)

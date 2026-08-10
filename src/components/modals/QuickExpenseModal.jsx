@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useLocalModules } from '../../context/LocalModulesContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
 import { PAYMENT_METHODS } from '../../utils/helpers';
@@ -22,8 +22,12 @@ const EXPENSE_CATEGORIES = [
 export default function QuickExpenseModal() {
   const { current, closeModal } = useModal();
   const open = current?.type === 'quickExpense';
-  const { addTransaction } = useApp();
+  const { addExpense, expenseCategories } = useLocalModules();
   const toast = useToast();
+
+  const categories = expenseCategories.items.length
+    ? expenseCategories.items.filter((c) => c.status !== 'inactive').map((c) => c.name)
+    : EXPENSE_CATEGORIES;
 
   const [form, setForm] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -62,16 +66,14 @@ export default function QuickExpenseModal() {
     }
     setLoading(true);
     try {
-      await addTransaction({
+      // Backend expense create also writes Transaction type=expense
+      await addExpense({
         date: form.date,
-        customerId: null,
-        type: 'expense',
-        itemDescription: form.itemDescription || form.category,
-        quantity: 1,
-        rate: Number(form.amount),
+        categoryName: form.category,
         amount: Number(form.amount),
-        notes: [form.category, form.notes].filter(Boolean).join(' · '),
-        paymentMethod: form.paymentMethod,
+        paymentMode: form.paymentMethod,
+        notes: form.itemDescription || form.notes,
+        gstType: 'Non-GST',
       });
       toast.success('Expense recorded');
       closeModal();
@@ -101,7 +103,7 @@ export default function QuickExpenseModal() {
           label="Category"
           value={form.category}
           onChange={set('category')}
-          options={EXPENSE_CATEGORIES.map((c) => ({ value: c, label: c }))}
+          options={categories.map((c) => ({ value: c, label: c }))}
         />
         <Input
           label="Description"

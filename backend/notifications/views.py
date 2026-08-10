@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django_filters import rest_framework as filters
 
+from accounts.ownership import data_owner
 from customers.models import Customer
 from .models import Notification, ActivityLog
 from .serializers import NotificationSerializer, ActivityLogSerializer
@@ -28,7 +29,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'patch', 'post', 'delete', 'head', 'options']
 
     def get_queryset(self):
-        return Notification.objects.filter(owner=self.request.user).select_related('customer')
+        return Notification.objects.filter(owner=data_owner(self.request.user)).select_related('customer')
 
     def get_object(self):
         lookup = self.kwargs.get(self.lookup_field)
@@ -40,7 +41,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        serializer.save(owner=data_owner(self.request.user))
 
     @action(detail=True, methods=['post'])
     def read(self, request, pk=None):
@@ -69,7 +70,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
         pk = str(raw_id).replace('cust_', '')
         try:
-            customer = Customer.objects.get(pk=pk, owner=request.user)
+            customer = Customer.objects.get(pk=pk, owner=data_owner(request.user))
         except (Customer.DoesNotExist, ValueError):
             return Response({'detail': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -79,7 +80,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
             f'₹{customer.current_balance} via {channel}.'
         )
         notif = Notification.objects.create(
-            owner=request.user,
+            owner=data_owner(request.user),
             type=Notification.Type.PAYMENT_REMINDER,
             title=title,
             message=body,
@@ -87,7 +88,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
             amount=customer.current_balance,
         )
         ActivityLog.objects.create(
-            owner=request.user,
+            owner=data_owner(request.user),
             type='reminder',
             message=f'Reminder sent to {customer.name} via {channel}',
         )
@@ -109,7 +110,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post', 'get'], url_path='sync')
     def sync(self, request):
         """Scan ledger and create missing alerts for the current user."""
-        result = sync_notifications(request.user)
+        result = sync_notifications(data_owner(request.user))
         rows = NotificationSerializer(result['notifications'], many=True).data
         unread = self.get_queryset().filter(is_read=False).count()
         return Response({
@@ -134,7 +135,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
             settings_obj.sms_notifications = True
 
         notif = Notification.objects.create(
-            owner=request.user,
+            owner=data_owner(request.user),
             type=Notification.Type.PAYMENT_REMINDER,
             title='Test alert - Daily Ledger',
             message='Yeh test message hai. Agar yeh email/SMS mila to owner alerts theek kaam kar rahe hain.',
@@ -153,7 +154,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
 class ActivityLogListView(APIView):
     def get(self, request):
-        qs = ActivityLog.objects.filter(owner=request.user)[:50]
+        qs = ActivityLog.objects.filter(owner=data_owner(request.user))[:50]
         return Response(ActivityLogSerializer(qs, many=True).data)
 
     def post(self, request):
@@ -162,7 +163,7 @@ class ActivityLogListView(APIView):
         if not message:
             return Response({'detail': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
         row = ActivityLog.objects.create(
-            owner=request.user,
+            owner=data_owner(request.user),
             type=log_type or 'info',
             message=message[:255],
         )

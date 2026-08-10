@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { FaPrint, FaFileExport, FaBook } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { useApp } from '../context/AppContext';
+import { useLocalModules } from '../context/LocalModulesContext';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { TRANSACTION_TYPES } from '../utils/helpers';
@@ -13,6 +14,7 @@ import {
 
 export default function Ledger() {
   const { customers, getCustomerTransactions, getCustomer } = useApp();
+  const { openingBalances } = useLocalModules();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -35,7 +37,15 @@ export default function Ledger() {
 
     txs = [...txs].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const openingBalance = 0;
+    const ob = openingBalances.items.find(
+      (o) =>
+        o.partyType === 'customer'
+        && customer
+        && String(o.partyName).toLowerCase() === String(customer.name || '').toLowerCase()
+    );
+    const openingBalance = ob
+      ? (ob.type === 'credit' ? -(Number(ob.amount) || 0) : (Number(ob.amount) || 0))
+      : 0;
     let running = openingBalance;
     const entries = txs.map((tx) => {
       let credit = 0;
@@ -53,7 +63,7 @@ export default function Ledger() {
       totalCredit: entries.reduce((s, e) => s + e.credit, 0),
       totalPayment: entries.reduce((s, e) => s + e.debit, 0),
     };
-  }, [customerId, month, fromDate, toDate, getCustomerTransactions]);
+  }, [customerId, month, fromDate, toDate, getCustomerTransactions, openingBalances.items, customer]);
 
   const handleCustomerChange = (id) => {
     setCustomerId(id);
@@ -94,7 +104,7 @@ export default function Ledger() {
 
   return (
     <div className="space-y-4">
-      <Breadcrumbs items={[{ label: 'Ledger' }]} />
+      <Breadcrumbs items={[{ label: 'Ledger', to: '/ledger/party' }, { label: 'Party Ledger' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Customer Ledger</h1>

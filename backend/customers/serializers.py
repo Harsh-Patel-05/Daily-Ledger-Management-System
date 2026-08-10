@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from accounts.ownership import data_owner
 from .models import Customer
 
 
@@ -27,5 +28,5 @@ class CustomerSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated):
-        validated['owner'] = self.context['request'].user
+        validated['owner'] = data_owner(self.context['request'].user)
         return super().create(validated)

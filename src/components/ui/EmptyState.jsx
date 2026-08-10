@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { FaInbox, FaUsers, FaExchangeAlt, FaBell, FaFileAlt } from 'react-icons/fa';
+import { FaInbox, FaUsers, FaExchangeAlt, FaBell, FaFileAlt, FaBoxes } from 'react-icons/fa';
 import Button from './Button';
 
 const icons = {
@@ -8,6 +8,7 @@ const icons = {
   transactions: FaExchangeAlt,
   notifications: FaBell,
   reports: FaFileAlt,
+  inventory: FaBoxes,
 };
 
 export default function EmptyState({

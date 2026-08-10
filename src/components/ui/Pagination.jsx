@@ -1,7 +1,8 @@
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import { cn } from '../../utils/formatters';
 
-export default function Pagination({ page, totalPages, onPageChange, total, perPage }) {
+export default function Pagination({ page, totalPages, onPageChange, onChange, total, perPage }) {
+  const change = onPageChange || onChange;
   if (totalPages <= 1) return null;
 
   const pages = [];
@@ -21,7 +22,7 @@ export default function Pagination({ page, totalPages, onPageChange, total, perP
       )}
       <div className="flex items-center gap-1">
         <button
-          onClick={() => onPageChange(page - 1)}
+          onClick={() => change?.(page - 1)}
           disabled={page === 1}
           className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
@@ -29,21 +30,21 @@ export default function Pagination({ page, totalPages, onPageChange, total, perP
         </button>
         {start > 1 && (
           <>
-            <PageBtn page={1} current={page} onClick={onPageChange} />
+            <PageBtn page={1} current={page} onClick={change} />
             {start > 2 && <span className="px-1 text-muted">…</span>}
           </>
         )}
         {pages.map((p) => (
-          <PageBtn key={p} page={p} current={page} onClick={onPageChange} />
+          <PageBtn key={p} page={p} current={page} onClick={change} />
         ))}
         {end < totalPages && (
           <>
             {end < totalPages - 1 && <span className="px-1 text-muted">…</span>}
-            <PageBtn page={totalPages} current={page} onClick={onPageChange} />
+            <PageBtn page={totalPages} current={page} onClick={change} />
           </>
         )}
         <button
-          onClick={() => onPageChange(page + 1)}
+          onClick={() => change?.(page + 1)}
           disabled={page === totalPages}
           className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >

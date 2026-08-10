@@ -4,16 +4,18 @@ from datetime import timedelta
 from django.contrib.auth import authenticate, get_user_model
 from django.utils import timezone
 from django.conf import settings
-from rest_framework import status, generics, permissions
+from rest_framework import status, generics, permissions, viewsets
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import BusinessProfile, BusinessSettings, PasswordOTP
+from .models import BusinessProfile, BusinessSettings, PasswordOTP, ShopRole, ShopPermission
+from .ownership import data_owner, is_shop_owner
 from .serializers import (
     UserSerializer, RegisterSerializer, LoginSerializer,
     ForgotPasswordSerializer, OTPVerifySerializer, ResetPasswordSerializer,
     ChangePasswordSerializer, BusinessProfileSerializer, BusinessSettingsSerializer,
+    StaffUserSerializer, ShopRoleSerializer, ShopPermissionSerializer,
 )
 
 User = get_user_model()
@@ -51,6 +53,8 @@ class LoginView(APIView):
         )
         if not user:
             return Response({'detail': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+        if getattr(user, 'business_owner_id', None) and not getattr(user, 'is_active_staff', True):
+            return Response({'detail': 'Staff account is deactivated'}, status=status.HTTP_403_FORBIDDEN)
         return Response(tokens_for_user(user))
 
 
@@ -137,19 +141,21 @@ class ChangePasswordView(APIView):
 
 class ProfileView(APIView):
     def get(self, request):
+        owner = data_owner(request.user)
         profile, _ = BusinessProfile.objects.get_or_create(
-            user=request.user,
+            user=owner,
             defaults={
-                'shop_name': request.user.shop_name or 'My Shop',
-                'owner_name': request.user.name,
-                'email': request.user.email,
-                'mobile': request.user.mobile,
+                'shop_name': owner.shop_name or 'My Shop',
+                'owner_name': owner.name,
+                'email': owner.email,
+                'mobile': owner.mobile,
             },
         )
         return Response(BusinessProfileSerializer(profile, context={'request': request}).data)
 
     def patch(self, request):
-        profile, _ = BusinessProfile.objects.get_or_create(user=request.user)
+        owner = data_owner(request.user)
+        profile, _ = BusinessProfile.objects.get_or_create(user=owner)
         data = request.data.copy()
         # accept camelCase
         aliases = {
@@ -169,7 +175,7 @@ class ProfileView(APIView):
         ser.is_valid(raise_exception=True)
         ser.save()
         # keep BusinessSettings in sync (Settings page reads gstNumber from here)
-        settings_obj, _ = BusinessSettings.objects.get_or_create(user=request.user)
+        settings_obj, _ = BusinessSettings.objects.get_or_create(user=owner)
         dirty = False
         if profile.gst and settings_obj.gst_number != profile.gst:
             settings_obj.gst_number = profile.gst
@@ -187,14 +193,15 @@ class ProfileView(APIView):
 
 class SettingsView(APIView):
     def get(self, request):
-        settings_obj, _ = BusinessSettings.objects.get_or_create(user=request.user)
+        owner = data_owner(request.user)
+        settings_obj, _ = BusinessSettings.objects.get_or_create(user=owner)
         profile, _ = BusinessProfile.objects.get_or_create(
-            user=request.user,
+            user=owner,
             defaults={
-                'shop_name': request.user.shop_name or 'My Shop',
-                'owner_name': request.user.name,
-                'email': request.user.email,
-                'mobile': request.user.mobile,
+                'shop_name': owner.shop_name or 'My Shop',
+                'owner_name': owner.name,
+                'email': owner.email,
+                'mobile': owner.mobile,
             },
         )
         # Backfill from profile when settings fields were never set
@@ -214,12 +221,13 @@ class SettingsView(APIView):
         return Response(BusinessSettingsSerializer(settings_obj).data)
 
     def patch(self, request):
-        settings_obj, _ = BusinessSettings.objects.get_or_create(user=request.user)
+        settings_obj, _ = BusinessSettings.objects.get_or_create(user=data_owner(request.user))
         ser = BusinessSettingsSerializer(settings_obj, data=request.data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
         # sync prefix/name to profile
-        profile, _ = BusinessProfile.objects.get_or_create(user=request.user)
+        owner = data_owner(request.user)
+        profile, _ = BusinessProfile.objects.get_or_create(user=owner)
         if settings_obj.invoice_prefix:
             profile.invoice_prefix = settings_obj.invoice_prefix
         if settings_obj.business_name:
@@ -228,3 +236,51 @@ class SettingsView(APIView):
             profile.gst = settings_obj.gst_number
         profile.save()
         return Response(BusinessSettingsSerializer(settings_obj).data)
+
+
+class StaffUserViewSet(viewsets.ModelViewSet):
+    serializer_class = StaffUserSerializer
+    search_fields = ['email', 'first_name', 'last_name', 'mobile']
+    ordering = ['first_name', 'email']
+
+    def get_queryset(self):
+        from django.db.models import Q
+        owner = data_owner(self.request.user)
+        return User.objects.filter(Q(pk=owner.pk) | Q(business_owner=owner)).order_by('role', 'first_name')
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        owner = data_owner(self.request.user)
+        if instance.pk == owner.pk:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError('Cannot delete the shop owner')
+        if instance.business_owner_id != owner.pk:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Not your staff member')
+        instance.delete()
+
+
+class ShopRoleViewSet(viewsets.ModelViewSet):
+    serializer_class = ShopRoleSerializer
+    search_fields = ['name', 'description']
+    ordering = ['name']
+
+    def get_queryset(self):
+        return ShopRole.objects.filter(owner=data_owner(self.request.user))
+
+    def perform_create(self, serializer):
+        serializer.save(owner=data_owner(self.request.user))
+
+
+class ShopPermissionViewSet(viewsets.ModelViewSet):
+    serializer_class = ShopPermissionSerializer
+    search_fields = ['module']
+    ordering = ['module']
+
+    def get_queryset(self):
+        return ShopPermission.objects.filter(owner=data_owner(self.request.user))
+
+    def perform_create(self, serializer):
+        serializer.save(owner=data_owner(self.request.user))

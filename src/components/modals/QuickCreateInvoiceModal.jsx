@@ -1,21 +1,27 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
 import { useStackedModal } from '../../hooks/useStackedModal';
 import { calcInvoiceTotals } from '../../utils/invoiceUtils';
+import {
+  stockIssuesForItems,
+} from '../../utils/inventoryInvoice';
 import { nextInvoiceNumber as fetchNextInvoiceNumber } from '../../api/invoices';
-import { INVOICE_FORMATS, getInvoiceFormat } from '../../data/invoiceFormats';
-import { formatCurrency } from '../../utils/formatters';
+import { formatCurrency, formatNumber } from '../../utils/formatters';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import Dropdown from '../ui/Dropdown';
 import DatePicker from '../ui/DatePicker';
 import Button from '../ui/Button';
 
+const DEFAULT_INVOICE_FORMAT = 'classic';
+
 export default function QuickCreateInvoiceModal() {
-  const { inStack, open, payload, closeModal, openModal } = useStackedModal('quickInvoice');
+  const { inStack, open, payload, closeModal } = useStackedModal('quickInvoice');
   const { customers, settings, profile, addInvoice } = useApp();
+  const { products, getProduct } = useInventory();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -24,18 +30,23 @@ export default function QuickCreateInvoiceModal() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
 
+  const activeProducts = useMemo(
+    () => products.filter((p) => p.status === 'active'),
+    [products]
+  );
+
   useEffect(() => {
     if (inStack && !form) {
       setForm({
         invoiceNumber: '',
         date: new Date().toISOString().split('T')[0],
         customerId: payload.customerId || '',
+        productId: '',
         description: '',
         quantity: '1',
         rate: '',
         discount: 0,
         taxRate: settings.defaultTaxRate || 18,
-        format: payload.format || 'classic',
         paymentMethod: 'Credit',
       });
       fetchNextInvoiceNumber()
@@ -63,7 +74,21 @@ export default function QuickCreateInvoiceModal() {
 
   const set = (key) => (val) => {
     const value = typeof val === 'object' && val?.target ? val.target.value : val;
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => {
+      if (key === 'productId') {
+        if (!value) return { ...f, productId: '', description: '', rate: '' };
+        const product = getProduct(value);
+        if (!product) return { ...f, productId: value };
+        return {
+          ...f,
+          productId: product.id,
+          description: product.name,
+          rate: String(product.sellingPrice ?? ''),
+          taxRate: product.taxRate ?? f.taxRate,
+        };
+      }
+      return { ...f, [key]: value };
+    });
   };
 
   const submit = async () => {
@@ -71,20 +96,35 @@ export default function QuickCreateInvoiceModal() {
     if (!form.customerId) errs.customerId = 'Required';
     if (!form.description.trim()) errs.description = 'Required';
     if (amount <= 0) errs.rate = 'Enter rate';
+
+    const line = {
+      productId: form.productId || '',
+      description: form.description,
+      quantity: Number(form.quantity) || 1,
+      rate: Number(form.rate) || 0,
+      amount,
+    };
+    const stockIssues = stockIssuesForItems([line], getProduct);
+    if (stockIssues.length) {
+      errs.quantity = stockIssues[0];
+      toast.error(stockIssues[0]);
+    }
+
     setErrors(errs);
     if (Object.keys(errs).length) return;
 
     setLoading(true);
     try {
       const invoice = await addInvoice({
-        invoiceNumber: form.invoiceNumber,
+        invoiceNumber: form.invoiceNumber || `${prefix}-TEMP`,
         date: form.date,
         dueDate: '',
         customerId: form.customerId,
         items: [{
           id: 1,
+          productId: form.productId || '',
           description: form.description,
-          hsn: '',
+          hsn: getProduct(form.productId)?.hsn || '',
           quantity: Number(form.quantity) || 1,
           rate: Number(form.rate) || 0,
           amount,
@@ -95,9 +135,11 @@ export default function QuickCreateInvoiceModal() {
         paymentMethod: form.paymentMethod,
         notes: 'Created via quick invoice modal',
         terms: `Payment due within ${settings.defaultPaymentTerms || 15} days.`,
-        format: form.format,
+        format: DEFAULT_INVOICE_FORMAT,
       });
+
       toast.success(`Invoice ${invoice.invoiceNumber} created`);
+      window.dispatchEvent(new Event('dlms:refresh-inventory'));
       closeModal();
       navigate(`/invoices/${invoice.id}`);
     } catch (err) {
@@ -107,7 +149,7 @@ export default function QuickCreateInvoiceModal() {
     }
   };
 
-  const fmt = getInvoiceFormat(form.format);
+  const linked = form.productId ? getProduct(form.productId) : null;
 
   return (
     <Modal
@@ -117,40 +159,11 @@ export default function QuickCreateInvoiceModal() {
       size="lg"
       footer={
         <>
-          <Button
-            variant="ghost"
-            onClick={() =>
-              openModal('invoiceFormat', {
-                selected: form.format,
-                onSelect: (id) => setForm((f) => ({ ...f, format: id })),
-              })
-            }
-          >
-            Change Format ({fmt.name})
-          </Button>
           <Button variant="outline" onClick={closeModal}>Cancel</Button>
           <Button onClick={submit} loading={loading}>Create Invoice</Button>
         </>
       }
     >
-      <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-sm flex justify-between gap-2">
-        <span className="text-slate-700 dark:text-slate-200">
-          Format: <strong>{fmt.name}</strong> · {fmt.nameHi}
-        </span>
-        <button
-          type="button"
-          className="text-primary text-xs font-semibold"
-          onClick={() =>
-            openModal('invoiceFormat', {
-              selected: form.format,
-              onSelect: (id) => setForm((f) => ({ ...f, format: id })),
-            })
-          }
-        >
-          Change
-        </button>
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Input label="Invoice #" value={form.invoiceNumber} onChange={set('invoiceNumber')} />
         <DatePicker label="Date" value={form.date} onChange={set('date')} />
@@ -164,6 +177,28 @@ export default function QuickCreateInvoiceModal() {
           className="sm:col-span-2"
           required
         />
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+            From Inventory
+          </label>
+          <select
+            value={form.productId}
+            onChange={set('productId')}
+            className="w-full rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Custom item (manual)</option>
+            {activeProducts.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} · stock {formatNumber(p.stockQty)} {p.unit} · {formatCurrency(p.sellingPrice)}
+              </option>
+            ))}
+          </select>
+          {linked && (
+            <p className="text-[11px] text-muted mt-1">
+              Available: {formatNumber(linked.stockQty)} {linked.unit}
+            </p>
+          )}
+        </div>
         <Input
           label="Item Description"
           value={form.description}
@@ -172,21 +207,16 @@ export default function QuickCreateInvoiceModal() {
           containerClassName="sm:col-span-2"
           required
         />
-        <Input label="Qty" type="number" value={form.quantity} onChange={set('quantity')} />
+        <Input label="Qty" type="number" value={form.quantity} onChange={set('quantity')} error={errors.quantity} />
         <Input label="Rate (₹)" type="number" value={form.rate} onChange={set('rate')} error={errors.rate} />
         <Input label="Discount" type="number" value={form.discount} onChange={set('discount')} />
         <Input label="GST %" type="number" value={form.taxRate} onChange={set('taxRate')} />
-        <Dropdown
-          label="Format"
-          value={form.format}
-          onChange={set('format')}
-          options={INVOICE_FORMATS.map((f) => ({ value: f.id, label: f.name }))}
-        />
         <Dropdown
           label="Payment Method"
           value={form.paymentMethod}
           onChange={set('paymentMethod')}
           options={['Credit', 'Cash', 'UPI', 'Bank', 'Cheque'].map((m) => ({ value: m, label: m }))}
+          className="sm:col-span-2"
         />
       </div>
 

@@ -1,18 +1,19 @@
 import { useRef, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaPrint, FaDownload, FaTrash, FaExchangeAlt, FaCopy, FaRupeeSign, FaShareAlt, FaPalette } from 'react-icons/fa';
+import { FaArrowLeft, FaPrint, FaDownload, FaTrash, FaExchangeAlt, FaCopy, FaRupeeSign, FaShareAlt } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
 import { downloadInvoicePdf, printInvoiceElement } from '../../utils/pdfExport';
-import { getInvoiceFormat } from '../../data/invoiceFormats';
 import InvoiceTemplate from '../../components/invoice/InvoiceTemplate';
 import RecordPaymentModal from '../../components/payments/RecordPaymentModal';
 import { Breadcrumbs, Button, ConfirmationDialog } from '../../components/ui';
 
+const DEFAULT_INVOICE_FORMAT = 'classic';
+
 export default function InvoiceView() {
   const { id } = useParams();
-  const { getInvoice, profile, deleteInvoice, addTransaction, duplicateInvoice, updateInvoice, markInvoicePaid } = useApp();
+  const { getInvoice, profile, deleteInvoice, addTransaction, duplicateInvoice, markInvoicePaid } = useApp();
   const toast = useToast();
   const navigate = useNavigate();
   const { openModal } = useModal();
@@ -21,7 +22,6 @@ export default function InvoiceView() {
   const [showDelete, setShowDelete] = useState(false);
   const [showPay, setShowPay] = useState(false);
   const [markingPaid, setMarkingPaid] = useState(false);
-  const [previewFormat, setPreviewFormat] = useState(null);
 
   const invoice = getInvoice(id);
 
@@ -91,9 +91,6 @@ export default function InvoiceView() {
     }
   };
 
-  const activeFormat = previewFormat || invoice.format || 'classic';
-  const fmt = getInvoiceFormat(activeFormat);
-
   return (
     <div className="space-y-4">
       <div className="no-print">
@@ -108,7 +105,7 @@ export default function InvoiceView() {
             </Link>
             <div>
               <h1 className="text-2xl font-bold text-slate-800 dark:text-white">{invoice.invoiceNumber}</h1>
-              <p className="text-sm text-muted">{invoice.customerName} · {fmt.name}</p>
+              <p className="text-sm text-muted">{invoice.customerName}</p>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">
@@ -122,22 +119,6 @@ export default function InvoiceView() {
                 </Button>
               </>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                openModal('invoiceFormat', {
-                  selected: activeFormat,
-                  onSelect: (formatId) => {
-                    setPreviewFormat(formatId);
-                    updateInvoice(invoice.id, { format: formatId });
-                    toast.success(`Format changed to ${getInvoiceFormat(formatId).name}`);
-                  },
-                })
-              }
-            >
-              <FaPalette size={12} /> Format
-            </Button>
             <Button variant="outline" size="sm" onClick={() => openModal('shareInvoice', { invoiceId: invoice.id })}>
               <FaShareAlt size={12} /> Share
             </Button>
@@ -163,9 +144,9 @@ export default function InvoiceView() {
       <div className="bg-slate-100 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-6 overflow-x-auto print:bg-white print:p-0">
         <InvoiceTemplate
           ref={invoiceRef}
-          invoice={{ ...invoice, format: activeFormat }}
+          invoice={{ ...invoice, format: DEFAULT_INVOICE_FORMAT }}
           profile={profile}
-          format={activeFormat}
+          format={DEFAULT_INVOICE_FORMAT}
         />
       </div>
 

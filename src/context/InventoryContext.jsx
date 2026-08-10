@@ -1,0 +1,313 @@
+import {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+} from 'react';
+import { useAuth } from './AuthContext';
+import * as inventoryApi from '../api/inventory';
+import { sameId } from '../api/ids';
+
+const InventoryContext = createContext(null);
+
+export function InventoryProvider({ children }) {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+
+  const [categories, setCategories] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [movements, setMovements] = useState([]);
+  const [statsExtra, setStatsExtra] = useState(null);
+  const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const clearLocal = useCallback(() => {
+    setCategories([]);
+    setSuppliers([]);
+    setProducts([]);
+    setMovements([]);
+    setStatsExtra(null);
+    setReady(false);
+    setError(null);
+  }, []);
+
+  const refreshStats = useCallback(async () => {
+    try {
+      const stats = await inventoryApi.getInventoryStats();
+      setStatsExtra(stats);
+    } catch {
+      // keep computed stats from local lists
+    }
+  }, []);
+
+  const refreshAll = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [cats, sups, prods, movs, stats] = await Promise.all([
+        inventoryApi.listCategories(),
+        inventoryApi.listSuppliers(),
+        inventoryApi.listProducts(),
+        inventoryApi.listMovements(),
+        inventoryApi.getInventoryStats().catch(() => null),
+      ]);
+      setCategories(cats);
+      setSuppliers(sups);
+      setProducts(prods);
+      setMovements(movs);
+      setStatsExtra(stats);
+      setReady(true);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || 'Failed to load inventory');
+      // Allow app to continue; inventory pages can retry
+      setReady(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      clearLocal();
+      return;
+    }
+    refreshAll().catch(() => {});
+  }, [isAuthenticated, authLoading, refreshAll, clearLocal]);
+
+  // Allow other modules (Settings refresh, invoice create) to trigger reload
+  useEffect(() => {
+    const onRefresh = () => {
+      if (isAuthenticated) refreshAll().catch(() => {});
+    };
+    window.addEventListener('dlms:refresh-inventory', onRefresh);
+    return () => window.removeEventListener('dlms:refresh-inventory', onRefresh);
+  }, [isAuthenticated, refreshAll]);
+
+  const getCategory = useCallback(
+    (id) => categories.find((c) => sameId(c.id, id)),
+    [categories]
+  );
+
+  const getSupplier = useCallback(
+    (id) => suppliers.find((s) => sameId(s.id, id)),
+    [suppliers]
+  );
+
+  const getProduct = useCallback(
+    (id) => products.find((p) => sameId(p.id, id)),
+    [products]
+  );
+
+  const getProductMovements = useCallback(
+    (productId) =>
+      movements
+        .filter((m) => sameId(m.productId, productId))
+        .sort(
+          (a, b) =>
+            String(b.date || '').localeCompare(String(a.date || '')) ||
+            String(b.createdAt || '').localeCompare(String(a.createdAt || ''))
+        ),
+    [movements]
+  );
+
+  const addCategory = useCallback(async (data) => {
+    const category = await inventoryApi.createCategory(data);
+    setCategories((prev) => [...prev, category]);
+    refreshStats();
+    return category;
+  }, [refreshStats]);
+
+  const updateCategory = useCallback(async (id, data) => {
+    const category = await inventoryApi.updateCategory(id, data);
+    setCategories((prev) => prev.map((c) => (sameId(c.id, id) ? category : c)));
+    return category;
+  }, []);
+
+  const deleteCategory = useCallback(async (id) => {
+    await inventoryApi.deleteCategory(id);
+    setCategories((prev) => prev.filter((c) => !sameId(c.id, id)));
+    refreshStats();
+  }, [refreshStats]);
+
+  const addSupplier = useCallback(async (data) => {
+    const supplier = await inventoryApi.createSupplier(data);
+    setSuppliers((prev) => [...prev, supplier]);
+    refreshStats();
+    return supplier;
+  }, [refreshStats]);
+
+  const updateSupplier = useCallback(async (id, data) => {
+    const supplier = await inventoryApi.updateSupplier(id, data);
+    setSuppliers((prev) => prev.map((s) => (sameId(s.id, id) ? supplier : s)));
+    return supplier;
+  }, []);
+
+  const deleteSupplier = useCallback(async (id) => {
+    await inventoryApi.deleteSupplier(id);
+    setSuppliers((prev) => prev.filter((s) => !sameId(s.id, id)));
+    setProducts((prev) =>
+      prev.map((p) => (sameId(p.supplierId, id) ? { ...p, supplierId: '' } : p))
+    );
+    refreshStats();
+  }, [refreshStats]);
+
+  const addProduct = useCallback(async (data) => {
+    const product = await inventoryApi.createProduct(data);
+    setProducts((prev) => [...prev, product]);
+    const movs = await inventoryApi.listMovements().catch(() => null);
+    if (movs) setMovements(movs);
+    await refreshStats();
+    return product;
+  }, [refreshStats]);
+
+  const updateProduct = useCallback(async (id, data) => {
+    const product = await inventoryApi.updateProduct(id, data);
+    setProducts((prev) => prev.map((p) => (sameId(p.id, id) ? product : p)));
+    await refreshStats();
+    return product;
+  }, [refreshStats]);
+
+  const deleteProduct = useCallback(async (id) => {
+    await inventoryApi.deleteProduct(id);
+    setProducts((prev) => prev.filter((p) => !sameId(p.id, id)));
+    setMovements((prev) => prev.filter((m) => !sameId(m.productId, id)));
+    await refreshStats();
+  }, [refreshStats]);
+
+  const recordStockMovement = useCallback(async (data) => {
+    const movement = await inventoryApi.createMovement(data);
+    setMovements((prev) => [movement, ...prev]);
+    const product = await inventoryApi.getProduct(data.productId).catch(() => null);
+    if (product) {
+      setProducts((prev) => prev.map((p) => (sameId(p.id, product.id) ? product : p)));
+    }
+    await refreshStats();
+    return movement;
+  }, [refreshStats]);
+
+  const recordStockMovements = useCallback(async (list = []) => {
+    const created = [];
+    for (const data of list) {
+      created.push(await recordStockMovement(data));
+    }
+    return created;
+  }, [recordStockMovement]);
+
+  const hasStockForReference = useCallback(
+    (reference) => {
+      if (!reference) return false;
+      return movements.some((m) => m.reference === reference && m.type === 'out');
+    },
+    [movements]
+  );
+
+  const getInventorySnapshot = useCallback(
+    () => ({ categories, suppliers, products, movements }),
+    [categories, suppliers, products, movements]
+  );
+
+  const stats = useMemo(() => {
+    const active = products.filter((p) => p.status === 'active');
+    const lowStockLocal = products.filter(
+      (p) =>
+        p.status !== 'discontinued' &&
+        Number(p.stockQty) > 0 &&
+        Number(p.stockQty) <= Number(p.reorderLevel)
+    );
+    const outOfStockLocal = products.filter(
+      (p) => p.status !== 'discontinued' && Number(p.stockQty) <= 0
+    );
+    const stockValueLocal = products.reduce(
+      (sum, p) => sum + Number(p.stockQty || 0) * Number(p.purchasePrice || 0),
+      0
+    );
+    const retailValueLocal = products.reduce(
+      (sum, p) => sum + Number(p.stockQty || 0) * Number(p.sellingPrice || 0),
+      0
+    );
+
+    if (statsExtra) {
+      const lowItems = statsExtra.lowStockItems?.length ? statsExtra.lowStockItems : lowStockLocal;
+      const outItems = statsExtra.outOfStockItems?.length ? statsExtra.outOfStockItems : outOfStockLocal;
+      return {
+        totalProducts: statsExtra.totalProducts ?? products.length,
+        activeProducts: statsExtra.activeProducts ?? active.length,
+        categories: statsExtra.categories ?? categories.length,
+        suppliers: statsExtra.suppliers ?? suppliers.length,
+        lowStock: statsExtra.lowStock ?? lowItems.length,
+        outOfStock: statsExtra.outOfStock ?? outItems.length,
+        stockValue: statsExtra.stockValue ?? stockValueLocal,
+        retailValue: statsExtra.retailValue ?? retailValueLocal,
+        recentMovements: statsExtra.recentMovements || movements.slice(0, 8),
+        lowStockItems: lowItems,
+        outOfStockItems: outItems,
+      };
+    }
+
+    return {
+      totalProducts: products.length,
+      activeProducts: active.length,
+      categories: categories.length,
+      suppliers: suppliers.length,
+      lowStock: lowStockLocal.length,
+      outOfStock: outOfStockLocal.length,
+      stockValue: stockValueLocal,
+      retailValue: retailValueLocal,
+      recentMovements: movements.slice(0, 8),
+      lowStockItems: lowStockLocal,
+      outOfStockItems: outOfStockLocal,
+    };
+  }, [products, categories, suppliers, movements, statsExtra]);
+
+  const value = {
+    ready,
+    loading,
+    error,
+    categories,
+    suppliers,
+    products,
+    movements,
+    stats,
+    getCategory,
+    getSupplier,
+    getProduct,
+    getProductMovements,
+    addCategory,
+    updateCategory,
+    deleteCategory,
+    addSupplier,
+    updateSupplier,
+    deleteSupplier,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    recordStockMovement,
+    recordStockMovements,
+    hasStockForReference,
+    getInventorySnapshot,
+    refreshAll,
+    refreshStats,
+    resetInventory: refreshAll,
+  };
+
+  return (
+    <InventoryContext.Provider value={value}>{children}</InventoryContext.Provider>
+  );
+}
+
+export function useInventory() {
+  const ctx = useContext(InventoryContext);
+  if (!ctx) throw new Error('useInventory must be used within InventoryProvider');
+  return ctx;
+}
+
+/** Dispatch from outside InventoryProvider (e.g. AppContext refresh). */
+export function requestInventoryRefresh() {
+  window.dispatchEvent(new Event('dlms:refresh-inventory'));
+}

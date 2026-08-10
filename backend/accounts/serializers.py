@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
-from .models import BusinessProfile, BusinessSettings, PasswordOTP
+from .models import BusinessProfile, BusinessSettings, PasswordOTP, ShopRole, ShopPermission
+from .ownership import data_owner
 
 User = get_user_model()
 
@@ -181,6 +182,7 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
             'fiscalYearStart': data['fiscal_year_start'],
             'defaultTaxRate': float(data['default_tax_rate']),
             'defaultPaymentTerms': data['default_payment_terms'],
+            'lowStockAlert': bool(data.get('low_stock_alert', True)),
             'notifications': {
                 'paymentReminders': data['payment_reminders'],
                 'overdueAlerts': data['overdue_alerts'],
@@ -204,6 +206,7 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
             'fiscalYearStart': 'fiscal_year_start',
             'defaultTaxRate': 'default_tax_rate',
             'defaultPaymentTerms': 'default_payment_terms',
+            'lowStockAlert': 'low_stock_alert',
         }
         for k, v in mapping.items():
             if k in data:
@@ -225,3 +228,153 @@ class BusinessSettingsSerializer(serializers.ModelSerializer):
             if field.name in data and field.name != 'user':
                 mapped[field.name] = data[field.name]
         return super().to_internal_value(mapped)
+
+
+class StaffUserSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(required=False, allow_blank=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True, min_length=6)
+    phone = serializers.CharField(source='mobile', required=False, allow_blank=True)
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            'id', 'email', 'name', 'first_name', 'last_name', 'phone', 'mobile',
+            'role', 'password', 'status', 'is_active_staff', 'shop_name',
+        )
+        read_only_fields = ('id',)
+
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        if 'phone' in data and 'mobile' not in data:
+            data['mobile'] = data.get('phone')
+        return super().to_internal_value(data)
+
+    def get_status(self, obj):
+        return 'active' if obj.is_active_staff and obj.is_active else 'inactive'
+
+    def to_representation(self, instance):
+        return {
+            'id': instance.pk,
+            'name': instance.name,
+            'email': instance.email,
+            'phone': instance.mobile or '',
+            'mobile': instance.mobile or '',
+            'role': instance.role,
+            'status': self.get_status(instance),
+            'shopName': instance.shop_name or '',
+        }
+
+    def create(self, validated):
+        request = self.context['request']
+        owner = data_owner(request.user)
+        name = validated.pop('name', '') or ''
+        password = validated.pop('password', None) or 'changeme123'
+        if name and not validated.get('first_name'):
+            parts = name.split(' ', 1)
+            validated['first_name'] = parts[0]
+            validated['last_name'] = parts[1] if len(parts) > 1 else ''
+        role = validated.get('role') or User.Role.STAFF
+        if role == User.Role.OWNER:
+            role = User.Role.STAFF
+        user = User.objects.create_user(
+            email=validated['email'].lower(),
+            password=password,
+            first_name=validated.get('first_name') or '',
+            last_name=validated.get('last_name') or '',
+            mobile=validated.get('mobile') or '',
+            role=role,
+            shop_name=owner.shop_name,
+            business_owner=owner,
+            is_active_staff=True,
+        )
+        return user
+
+    def update(self, instance, validated):
+        name = validated.pop('name', None)
+        password = validated.pop('password', None)
+        if name:
+            parts = name.split(' ', 1)
+            instance.first_name = parts[0]
+            instance.last_name = parts[1] if len(parts) > 1 else ''
+        for field in ('email', 'mobile', 'role', 'is_active_staff'):
+            if field in validated:
+                setattr(instance, field, validated[field])
+        status_raw = self.initial_data.get('status')
+        if status_raw is not None:
+            instance.is_active_staff = str(status_raw).lower() == 'active'
+            instance.is_active = instance.is_active_staff
+        if password:
+            instance.set_password(password)
+        instance.save()
+        return instance
+
+
+class ShopRoleSerializer(serializers.ModelSerializer):
+    users = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShopRole
+        fields = ('id', 'name', 'description', 'users', 'created_at')
+        read_only_fields = ('id', 'created_at')
+
+    def get_users(self, obj):
+        owner = obj.owner
+        role_key = obj.name.lower()
+        mapping = {
+            'owner': User.Role.OWNER,
+            'staff': User.Role.STAFF,
+            'accountant': User.Role.ACCOUNTANT,
+            'manager': User.Role.STAFF,
+            'cashier': User.Role.STAFF,
+        }
+        role = mapping.get(role_key)
+        if not role:
+            return 0
+        if role == User.Role.OWNER:
+            return 1
+        return User.objects.filter(business_owner=owner, role=role, is_active_staff=True).count()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['id'] = instance.pk
+        data['users'] = self.get_users(instance)
+        return data
+
+    def create(self, validated):
+        validated['owner'] = data_owner(self.context['request'].user)
+        return super().create(validated)
+
+
+class ShopPermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShopPermission
+        fields = ('id', 'module', 'can_view', 'can_create', 'can_edit', 'can_delete')
+        read_only_fields = ('id',)
+
+    def to_internal_value(self, data):
+        data = data.copy() if hasattr(data, 'copy') else dict(data)
+        aliases = {
+            'view': 'can_view',
+            'create': 'can_create',
+            'edit': 'can_edit',
+            'delete': 'can_delete',
+        }
+        for k, v in aliases.items():
+            if k in data and v not in data:
+                data[v] = data[k]
+        return super().to_internal_value(data)
+
+    def to_representation(self, instance):
+        return {
+            'id': instance.pk,
+            'module': instance.module,
+            'view': instance.can_view,
+            'create': instance.can_create,
+            'edit': instance.can_edit,
+            'delete': instance.can_delete,
+        }
+
+    def create(self, validated):
+        validated['owner'] = data_owner(self.context['request'].user)
+        return super().create(validated)

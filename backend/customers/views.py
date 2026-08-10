@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
+from accounts.ownership import data_owner
 from .models import Customer
 from .serializers import CustomerSerializer
 from notifications.models import ActivityLog
@@ -25,12 +26,13 @@ class CustomerViewSet(viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        return Customer.objects.filter(owner=self.request.user)
+        return Customer.objects.filter(owner=data_owner(self.request.user))
 
     def perform_create(self, serializer):
-        customer = serializer.save(owner=self.request.user)
+        owner = data_owner(self.request.user)
+        customer = serializer.save(owner=owner)
         ActivityLog.objects.create(
-            owner=self.request.user,
+            owner=owner,
             type='customer',
             message=f'Customer added: {customer.name}',
         )
@@ -38,16 +40,17 @@ class CustomerViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         customer = serializer.save()
         ActivityLog.objects.create(
-            owner=self.request.user,
+            owner=data_owner(self.request.user),
             type='customer',
             message=f'Customer updated: {customer.name}',
         )
 
     def perform_destroy(self, instance):
         name = instance.name
+        owner = data_owner(self.request.user)
         instance.delete()
         ActivityLog.objects.create(
-            owner=self.request.user,
+            owner=owner,
             type='customer',
             message=f'Customer deleted: {name}',
         )

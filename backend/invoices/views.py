@@ -2,8 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
-from .models import Invoice
-from .serializers import InvoiceSerializer
+from accounts.ownership import data_owner
+from .models import Invoice, SalesReturn
+from .serializers import InvoiceSerializer, SalesReturnSerializer
 from notifications.models import ActivityLog
 from notifications.services import notify_invoice_created
 
@@ -33,7 +34,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return Invoice.objects.filter(owner=self.request.user).prefetch_related('items').select_related('customer')
+        return Invoice.objects.filter(
+            owner=data_owner(self.request.user)
+        ).prefetch_related('items').select_related('customer')
 
     def get_object(self):
         lookup = self.kwargs.get(self.lookup_field)
@@ -45,26 +48,28 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def perform_create(self, serializer):
+        owner = data_owner(self.request.user)
         invoice = serializer.save()
         ActivityLog.objects.create(
-            owner=self.request.user,
+            owner=owner,
             type='invoice',
             message=f'Invoice created: {invoice.invoice_number}',
         )
-        notify_invoice_created(self.request.user, invoice)
+        notify_invoice_created(owner, invoice)
 
     def perform_destroy(self, instance):
         from transactions.models import Transaction
 
         customer = instance.customer
         number = instance.invoice_number
+        owner = data_owner(self.request.user)
         # Remove ledger rows created for this invoice so balance stays correct
-        Transaction.objects.filter(owner=self.request.user, invoice=instance).delete()
+        Transaction.objects.filter(owner=owner, invoice=instance).delete()
         instance.delete()
         if customer:
             customer.recalculate_balance()
         ActivityLog.objects.create(
-            owner=self.request.user,
+            owner=owner,
             type='invoice',
             message=f'Invoice deleted: {number}',
         )
@@ -72,11 +77,12 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='next-number')
     def next_number(self, request):
         prefix = 'INV'
+        owner = data_owner(request.user)
         try:
             prefix = request.user.business.invoice_prefix or 'INV'
         except Exception:
             pass
-        return Response({'invoiceNumber': Invoice.next_number(request.user, prefix)})
+        return Response({'invoiceNumber': Invoice.next_number(owner, prefix)})
 
     @action(detail=True, methods=['post'])
     def duplicate(self, request, pk=None):
@@ -84,6 +90,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         from datetime import date
         from .models import InvoiceItem
 
+        owner = data_owner(request.user)
         prefix = 'INV'
         try:
             prefix = request.user.business.invoice_prefix or 'INV'
@@ -91,9 +98,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             pass
 
         clone = Invoice.objects.create(
-            owner=request.user,
+            owner=owner,
             customer=original.customer,
-            invoice_number=Invoice.next_number(request.user, prefix),
+            invoice_number=Invoice.next_number(owner, prefix),
             date=date.today(),
             due_date=original.due_date,
             customer_name=original.customer_name,
@@ -129,6 +136,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         from transactions.models import Transaction
 
         invoice = self.get_object()
+        owner = data_owner(request.user)
         remaining = Decimal(str(invoice.balance or 0))
         method = (
             request.data.get('method')
@@ -141,7 +149,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         if remaining > 0:
             Transaction.objects.create(
-                owner=request.user,
+                owner=owner,
                 customer=invoice.customer,
                 date=date_cls.today(),
                 type=Transaction.Type.PAYMENT,
@@ -158,7 +166,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             if invoice.customer:
                 invoice.customer.recalculate_balance()
             ActivityLog.objects.create(
-                owner=request.user,
+                owner=owner,
                 type='payment',
                 message=f'Invoice marked paid: {invoice.invoice_number} · ₹{remaining}',
             )
@@ -167,3 +175,54 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             invoice.recalculate_totals()
 
         return Response(InvoiceSerializer(invoice, context={'request': request}).data)
+
+
+class SalesReturnViewSet(viewsets.ModelViewSet):
+    serializer_class = SalesReturnSerializer
+    search_fields = ['reason', 'customer__name', 'invoice__invoice_number']
+    ordering_fields = ['date', 'amount', 'created_at']
+    ordering = ['-date', '-created_at']
+    http_method_names = ['get', 'post', 'head', 'options', 'delete']
+
+    def get_queryset(self):
+        return SalesReturn.objects.filter(
+            owner=data_owner(self.request.user)
+        ).select_related('customer', 'invoice')
+
+    def perform_create(self, serializer):
+        owner = data_owner(self.request.user)
+        sales_return = serializer.save()
+        ActivityLog.objects.create(
+            owner=owner,
+            type='return',
+            message=f'Sales return: {sales_return.customer.name} · ₹{sales_return.amount}',
+        )
+
+    def perform_destroy(self, instance):
+        from transactions.models import Transaction
+
+        owner = data_owner(self.request.user)
+        customer = instance.customer
+        amount = instance.amount
+        name = customer.name if customer else ''
+        # Best-effort: remove matching return transaction for this invoice/date/amount
+        qs = Transaction.objects.filter(
+            owner=owner,
+            customer=customer,
+            type=Transaction.Type.RETURN,
+            date=instance.date,
+            amount=instance.amount,
+        )
+        if instance.invoice_id:
+            qs = qs.filter(invoice_id=instance.invoice_id)
+        tx = qs.first()
+        if tx:
+            tx.delete()
+        instance.delete()
+        if customer:
+            customer.recalculate_balance()
+        ActivityLog.objects.create(
+            owner=owner,
+            type='return',
+            message=f'Sales return deleted: {name} · ₹{amount}',
+        )

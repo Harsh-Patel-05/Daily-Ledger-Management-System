@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Invoice, InvoiceItem
+from .models import Invoice, InvoiceItem, SalesReturn
 
 
 class InvoiceItemInline(admin.TabularInline):
@@ -18,3 +18,10 @@ class InvoiceAdmin(admin.ModelAdmin):
 @admin.register(InvoiceItem)
 class InvoiceItemAdmin(admin.ModelAdmin):
     list_display = ('description', 'invoice', 'quantity', 'rate', 'amount')
+
+
+@admin.register(SalesReturn)
+class SalesReturnAdmin(admin.ModelAdmin):
+    list_display = ('customer', 'amount', 'date', 'invoice', 'gst_applicable', 'owner')
+    list_filter = ('gst_applicable', 'owner', 'date')
+    search_fields = ('customer__name', 'reason', 'invoice__invoice_number')

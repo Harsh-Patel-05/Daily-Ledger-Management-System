@@ -103,7 +103,7 @@ export default function SignUp() {
           icon={FaUser}
           value={form.name}
           onChange={setField('name')}
-          placeholder="Mukesh Sharma"
+          placeholder="Your name"
           error={errors.name}
           required
           autoComplete="name"
@@ -135,7 +135,7 @@ export default function SignUp() {
           icon={FaStore}
           value={form.shop_name}
           onChange={setField('shop_name')}
-          placeholder="Ganesh Traders"
+          placeholder="Shop / business name"
           error={errors.shop_name}
           hint="Optional — defaults to your name"
           autoComplete="organization"

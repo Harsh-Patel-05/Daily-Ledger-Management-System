@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from django.db.models import Sum
+from accounts.ownership import data_owner
 from .models import Transaction
 from .serializers import TransactionSerializer
 from customers.models import Customer
@@ -37,7 +38,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return Transaction.objects.filter(owner=self.request.user).select_related('customer')
+        return Transaction.objects.filter(owner=data_owner(self.request.user)).select_related('customer')
 
     def get_object(self):
         lookup = self.kwargs.get(self.lookup_field)
@@ -49,13 +50,14 @@ class TransactionViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def perform_create(self, serializer):
+        owner = data_owner(self.request.user)
         tx = serializer.save()
         ActivityLog.objects.create(
-            owner=self.request.user,
+            owner=owner,
             type='transaction',
             message=f'Transaction: {tx.type} ₹{tx.amount}',
         )
-        notify_credit_transaction(self.request.user, tx)
+        notify_credit_transaction(owner, tx)
 
     def perform_destroy(self, instance):
         customer = instance.customer
@@ -66,6 +68,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='record-payment')
     def record_payment(self, request):
         """Record a payment against a customer (and optional invoice)."""
+        owner = data_owner(request.user)
         customer_raw = request.data.get('customerId') or request.data.get('customer_id')
         amount = request.data.get('amount')
         method = request.data.get('method') or request.data.get('paymentMethod') or 'Cash'
@@ -78,7 +81,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
         pk = str(customer_raw).replace('cust_', '')
         try:
-            customer = Customer.objects.get(pk=pk, owner=request.user)
+            customer = Customer.objects.get(pk=pk, owner=owner)
         except Customer.DoesNotExist:
             return Response({'detail': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -86,7 +89,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         from invoices.models import Invoice
 
         tx = Transaction.objects.create(
-            owner=request.user,
+            owner=owner,
             customer=customer,
             date=date or date_cls.today(),
             type=Transaction.Type.PAYMENT,
@@ -101,7 +104,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if invoice_id:
             inv_pk = str(invoice_id).replace('inv_', '')
             try:
-                invoice = Invoice.objects.get(pk=inv_pk, owner=request.user)
+                invoice = Invoice.objects.get(pk=inv_pk, owner=owner)
                 invoice.paid_amount = (invoice.paid_amount or 0) + float(amount)
                 invoice.recalculate_totals()
                 tx.invoice = invoice
@@ -111,7 +114,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
         customer.recalculate_balance()
         ActivityLog.objects.create(
-            owner=request.user,
+            owner=owner,
             type='payment',
             message=f'Payment recorded: ₹{amount}',
         )
@@ -152,6 +155,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         """Persist day-closing note + return today's ledger summary."""
         from datetime import date as date_cls
 
+        owner = data_owner(request.user)
         date_str = request.data.get('date') or date_cls.today().isoformat()
         qs = self.get_queryset().filter(date=date_str)
 
@@ -173,7 +177,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
             )
         )
         activity = ActivityLog.objects.create(
-            owner=request.user,
+            owner=owner,
             type='day_close',
             message=note[:255],
         )

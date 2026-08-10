@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from accounts.ownership import data_owner
 from customers.models import Customer
 from .models import Transaction
 
@@ -43,12 +44,13 @@ class TransactionSerializer(serializers.ModelSerializer):
         if isinstance(raw_id, str) and raw_id.startswith('cust_'):
             pk = raw_id.replace('cust_', '')
         try:
-            return Customer.objects.get(pk=pk, owner=self.context['request'].user)
+            return Customer.objects.get(pk=pk, owner=data_owner(self.context['request'].user))
         except (Customer.DoesNotExist, ValueError):
             raise serializers.ValidationError({'customerId': 'Customer not found'})
 
     def create(self, validated):
         request = self.context['request']
+        owner = data_owner(request.user)
         raw = self.initial_data.get('customerId') or self.initial_data.get('customer_id')
         customer = self._resolve_customer(raw) if raw else validated.get('customer')
         if validated.get('type') != Transaction.Type.EXPENSE and not customer:
@@ -56,7 +58,7 @@ class TransactionSerializer(serializers.ModelSerializer):
         validated.pop('customer', None)
         validated.pop('customerId', None)
         tx = Transaction.objects.create(
-            owner=request.user,
+            owner=owner,
             customer=customer,
             date=validated['date'],
             type=validated['type'],

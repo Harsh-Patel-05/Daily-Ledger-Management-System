@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaPlus, FaFileInvoice, FaUpload, FaEye, FaTrash, FaDownload } from 'react-icons/fa';
+import { FaPlus, FaUpload, FaEye, FaTrash, FaDownload } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
@@ -107,7 +107,7 @@ export default function InvoiceList() {
 
   return (
     <div className="space-y-4">
-      <Breadcrumbs items={[{ label: 'Invoices' }]} />
+      <Breadcrumbs items={[{ label: 'Sales', to: '/sales/invoices' }, { label: 'Sales Invoices' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Invoices</h1>
@@ -129,18 +129,11 @@ export default function InvoiceList() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
           {
-            title: 'Choose Format',
-            desc: 'Classic GST, Modern, Compact, Traditional Roj Mel, Thermal receipt.',
-            action: () => openModal('invoiceFormat', { mode: 'create' }),
-            icon: FaFileInvoice,
-            color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30',
-          },
-          {
             title: 'Quick Invoice',
-            desc: 'Create invoice fast in a modal — pick format & customer.',
+            desc: 'Create invoice fast in a modal with customer & product.',
             action: () => openModal('quickInvoice'),
             icon: FaPlus,
             color: 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30',

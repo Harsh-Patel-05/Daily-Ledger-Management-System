@@ -28,6 +28,7 @@ export function createInvoice(data) {
     notes: data.notes || '',
     terms: data.terms || '',
     items: (data.items || []).map((item, i) => ({
+      productId: item.productId ? (toPk(item.productId) ?? item.productId) : null,
       description: item.description,
       hsn: item.hsn || '',
       quantity: item.quantity || 1,
@@ -44,6 +45,7 @@ export function updateInvoice(id, data) {
   if (data.customerId != null) payload.customerId = toPk(data.customerId);
   if (data.items) {
     payload.items = data.items.map((item, i) => ({
+      productId: item.productId ? (toPk(item.productId) ?? item.productId) : null,
       description: item.description,
       hsn: item.hsn || '',
       quantity: item.quantity || 1,

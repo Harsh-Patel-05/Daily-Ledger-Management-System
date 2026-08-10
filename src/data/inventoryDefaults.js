@@ -1,0 +1,30 @@
+export const UNITS = ['pcs', 'kg', 'g', 'ltr', 'ml', 'box', 'dozen', 'm', 'pack', 'set'];
+
+export const PRODUCT_STATUSES = ['active', 'inactive', 'discontinued'];
+
+export const STOCK_MOVEMENT_TYPES = {
+  in: { label: 'Stock In', color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/30' },
+  out: { label: 'Stock Out', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/30' },
+  adjust: { label: 'Adjustment', color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/30' },
+  return: { label: 'Return', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/30' },
+};
+
+export const emptyProduct = {
+  name: '',
+  sku: '',
+  barcode: '',
+  categoryId: '',
+  supplierId: '',
+  description: '',
+  unit: 'pcs',
+  purchasePrice: 0,
+  sellingPrice: 0,
+  taxRate: 18,
+  stockQty: 0,
+  reorderLevel: 10,
+  reorderQty: 50,
+  location: '',
+  status: 'active',
+  image: null,
+  hsn: '',
+};

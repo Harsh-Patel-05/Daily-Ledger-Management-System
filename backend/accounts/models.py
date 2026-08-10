@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 
@@ -36,6 +37,15 @@ class User(AbstractUser):
     mobile = models.CharField(max_length=15, blank=True)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.OWNER)
     shop_name = models.CharField(max_length=200, blank=True)
+    business_owner = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='staff_members',
+        help_text='Null for shop owners; staff point at the shop owner.',
+    )
+    is_active_staff = models.BooleanField(default=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['first_name']
@@ -49,6 +59,44 @@ class User(AbstractUser):
     def name(self):
         full = f'{self.first_name} {self.last_name}'.strip()
         return full or self.email
+
+
+class ShopRole(models.Model):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='shop_roles',
+    )
+    name = models.CharField(max_length=80)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = [('owner', 'name')]
+
+    def __str__(self):
+        return self.name
+
+
+class ShopPermission(models.Model):
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='shop_permissions',
+    )
+    module = models.CharField(max_length=80)
+    can_view = models.BooleanField(default=True)
+    can_create = models.BooleanField(default=False)
+    can_edit = models.BooleanField(default=False)
+    can_delete = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['module']
+        unique_together = [('owner', 'module')]
+
+    def __str__(self):
+        return f'{self.module} ({self.owner_id})'
 
 
 class BusinessProfile(models.Model):
@@ -87,6 +135,7 @@ class BusinessSettings(models.Model):
     fiscal_year_start = models.CharField(max_length=2, default='04')
     default_tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
     default_payment_terms = models.PositiveIntegerField(default=15)
+    low_stock_alert = models.BooleanField(default=True)
     payment_reminders = models.BooleanField(default=True)
     overdue_alerts = models.BooleanField(default=True)
     daily_summary = models.BooleanField(default=True)

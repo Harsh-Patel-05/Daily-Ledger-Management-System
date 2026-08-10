@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import { Link, useParams } from 'react-router-dom';
 import { FaSave, FaDownload, FaUpload, FaUndo, FaCheck, FaRocket } from 'react-icons/fa';
 import { useApp } from '../context/AppContext';
+import { useInventory } from '../context/InventoryContext';
 import { useTheme } from '../context/ThemeContext';
 import { useToast } from '../context/ToastContext';
 import { useTour } from '../context/TourContext';
@@ -8,13 +10,28 @@ import { testOwnerAlert } from '../api/notifications';
 import { exportBackupJson } from '../utils/storage';
 import { ACCENT_PRESETS } from '../data/themePresets';
 import { Breadcrumbs, Card, CardHeader, Input, Dropdown, Button, ConfirmationDialog } from '../components/ui';
+import { cn } from '../utils/formatters';
+
+const SETTINGS_TABS = [
+  { id: 'business', label: 'Business' },
+  { id: 'gst', label: 'GST' },
+  { id: 'invoice', label: 'Invoice' },
+  { id: 'inventory', label: 'Inventory' },
+  { id: 'payment', label: 'Payment' },
+  { id: 'tax', label: 'Tax' },
+  { id: 'user', label: 'User' },
+];
 
 export default function Settings() {
+  const { section } = useParams();
+  const activeSection = SETTINGS_TABS.some((t) => t.id === section) ? section : 'business';
+
   const {
     settings, setSettings, profile, setProfile,
     customers, transactions, invoices, notifications, activityLog,
     refreshFromServer,
   } = useApp();
+  const { getInventorySnapshot } = useInventory();
   const { applyFromSettings, mode, accent } = useTheme();
   const { startTour } = useTour();
   const toast = useToast();
@@ -96,7 +113,14 @@ export default function Settings() {
 
   const handleBackup = () => {
     exportBackupJson({
-      customers, transactions, invoices, notifications, settings: form, profile: { ...profile, ...bank }, activityLog,
+      customers,
+      transactions,
+      invoices,
+      notifications,
+      settings: form,
+      profile: { ...profile, ...bank },
+      activityLog,
+      inventory: getInventorySnapshot(),
       exportedAt: new Date().toISOString(),
     }, `dlms-backup-${new Date().toISOString().slice(0, 10)}.json`);
     toast.success('Backup downloaded');
@@ -109,31 +133,96 @@ export default function Settings() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <Breadcrumbs items={[{ label: 'Settings' }]} />
+      <Breadcrumbs items={[{ label: 'Settings', to: '/settings/business' }, { label: SETTINGS_TABS.find((t) => t.id === activeSection)?.label || 'Business' }]} />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Settings</h1>
-          <p className="text-sm text-muted mt-0.5">Business, banking, backups & preferences</p>
+          <p className="text-sm text-muted mt-0.5">Business, GST, invoice, inventory, payment & user preferences</p>
         </div>
         <Button onClick={handleSave} loading={loading}>
           <FaSave size={12} /> Save Settings
         </Button>
       </div>
 
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+        {SETTINGS_TABS.map((tab) => (
+          <Link
+            key={tab.id}
+            to={`/settings/${tab.id}`}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors',
+              activeSection === tab.id
+                ? 'bg-primary text-white'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
+            )}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </div>
+
+      {(activeSection === 'business') && (
       <Card>
         <CardHeader title="Business Information" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Input label="Business Name" value={form.businessName} onChange={set('businessName')} />
-          <Input label="GST Number" value={form.gstNumber} onChange={set('gstNumber')} />
+          <Input label="Business Address" value={form.businessAddress || profile.address || ''} onChange={set('businessAddress')} />
+        </div>
+      </Card>
+      )}
+
+      {(activeSection === 'gst') && (
+      <Card>
+        <CardHeader title="GST Settings" subtitle="GST and Non-GST both supported" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <Input label="GST Number (GSTIN)" value={form.gstNumber} onChange={set('gstNumber')} />
+          <Dropdown
+            label="Default Billing"
+            value={form.defaultGstMode || 'both'}
+            onChange={set('defaultGstMode')}
+            options={[
+              { value: 'both', label: 'GST + Non-GST' },
+              { value: 'gst', label: 'GST only' },
+              { value: 'non_gst', label: 'Non-GST only' },
+            ]}
+          />
+        </div>
+      </Card>
+      )}
+
+      {(activeSection === 'invoice') && (
+      <Card>
+        <CardHeader title="Invoice Settings" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <Input label="Invoice Prefix" value={form.invoicePrefix} onChange={set('invoicePrefix')} hint="Used for invoice numbering e.g. SGT-2026-0001" />
-          <Input label="Default Tax Rate (%)" type="number" value={form.defaultTaxRate ?? 18} onChange={set('defaultTaxRate')} />
           <Input label="Default Payment Terms (days)" type="number" value={form.defaultPaymentTerms ?? 15} onChange={set('defaultPaymentTerms')} />
         </div>
       </Card>
+      )}
 
+      {(activeSection === 'tax') && (
       <Card>
-        <CardHeader title="Bank & UPI Details" subtitle="Printed on tax invoices for customer payments" />
+        <CardHeader title="Tax Settings" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <Input label="Default Tax Rate (%)" type="number" value={form.defaultTaxRate ?? 18} onChange={set('defaultTaxRate')} />
+          <Dropdown
+            label="Tax Split"
+            value={form.taxSplit || 'cgst_sgst'}
+            onChange={set('taxSplit')}
+            options={[
+              { value: 'cgst_sgst', label: 'CGST + SGST' },
+              { value: 'igst', label: 'IGST' },
+            ]}
+          />
+        </div>
+      </Card>
+      )}
+
+      {(activeSection === 'payment') && (
+      <Card>
+        <CardHeader title="Payment Settings" subtitle="Bank & UPI details printed on invoices" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <Input label="Default Payment Terms (days)" type="number" value={form.defaultPaymentTerms ?? 15} onChange={set('defaultPaymentTerms')} />
           <Input label="Bank Name" value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} />
           <Input label="Account Number" value={bank.bankAccount} onChange={(e) => setBank({ ...bank, bankAccount: e.target.value })} />
           <Input label="IFSC" value={bank.bankIFSC} onChange={(e) => setBank({ ...bank, bankIFSC: e.target.value })} />
@@ -141,7 +230,9 @@ export default function Settings() {
           <Input label="UPI ID" value={bank.upiId} onChange={(e) => setBank({ ...bank, upiId: e.target.value })} className="sm:col-span-2" />
         </div>
       </Card>
+      )}
 
+      {(activeSection === 'user') && (
       <Card>
         <CardHeader title="Appearance" subtitle="Mode aur color theme — select karte hi poora UI update hota hai" />
         <div className="space-y-6">
@@ -240,7 +331,34 @@ export default function Settings() {
           </div>
         </div>
       </Card>
+      )}
 
+      {(activeSection === 'inventory') && (
+      <Card>
+        <CardHeader title="Inventory Settings" />
+        <div className="space-y-3">
+          <label className="flex items-center justify-between gap-4 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/40 cursor-pointer transition-colors">
+            <div>
+              <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Low stock alerts</p>
+              <p className="text-xs text-muted">Notify when products hit reorder level or go out of stock</p>
+            </div>
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={!!form.lowStockAlert}
+                onChange={(e) => set('lowStockAlert')(e.target.checked)}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-slate-200 dark:bg-slate-600 rounded-full peer-checked:bg-primary transition-colors" />
+              <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5" />
+            </div>
+          </label>
+        </div>
+      </Card>
+      )}
+
+      {(activeSection === 'user') && (
+      <>
       <Card>
         <CardHeader title="Preferences" />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -352,7 +470,7 @@ export default function Settings() {
           <div>
             <p className="text-sm text-slate-700 dark:text-slate-200 font-medium">Website guided tour</p>
             <p className="text-xs text-muted mt-0.5">
-              A short walkthrough of the dashboard, customers, transactions, invoices, ledger, and quick actions.
+              Walk through Parties → Inventory → Sales → Purchase → Payments → Ledger → Expenses → GST/Reports.
             </p>
           </div>
           <Button
@@ -384,6 +502,8 @@ export default function Settings() {
           Tip: Press <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700">Ctrl+K</kbd> anywhere for the command palette.
         </p>
       </Card>
+      </>
+      )}
 
       <ConfirmationDialog
         open={showReset}
@@ -404,3 +524,4 @@ export default function Settings() {
     </div>
   );
 }
+

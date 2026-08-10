@@ -8,7 +8,7 @@ from invoices.models import Invoice
 from notifications.models import Notification, ActivityLog
 from purchase.models import PurchaseBill, PurchasePayment, PurchaseReturn
 from expenses.models import Expense, ExpenseCategory
-from inventory.models import Category, Supplier, Product, StockMovement, Unit
+from inventory.models import Category, Supplier, Product, StockMovement
 from core.models import OpeningBalance
 
 User = get_user_model()
@@ -60,7 +60,6 @@ class Command(BaseCommand):
             ('products', Product),
             ('categories', Category),
             ('suppliers', Supplier),
-            ('units', Unit),
             ('opening_balances', OpeningBalance),
             ('shop_roles', ShopRole),
             ('shop_permissions', ShopPermission),
@@ -86,7 +85,6 @@ class Command(BaseCommand):
             ('products', Product.objects.filter(owner=owner)),
             ('categories', Category.objects.filter(owner=owner)),
             ('suppliers', Supplier.objects.filter(owner=owner)),
-            ('units', Unit.objects.filter(owner=owner)),
             ('opening_balances', OpeningBalance.objects.filter(owner=owner)),
             ('shop_roles', ShopRole.objects.filter(owner=owner)),
             ('shop_permissions', ShopPermission.objects.filter(owner=owner)),

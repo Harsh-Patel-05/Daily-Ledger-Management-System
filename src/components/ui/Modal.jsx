@@ -29,7 +29,7 @@ export default function Modal({
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -38,30 +38,37 @@ export default function Modal({
             onClick={onClose}
           />
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            initial={{ opacity: 0, y: 40, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.98 }}
+            transition={{ type: 'spring', damping: 28, stiffness: 320 }}
             className={cn(
-              'relative w-full bg-surface dark:bg-surface rounded-2xl soft-shadow border border-border dark:border-border',
+              'relative w-full bg-surface dark:bg-surface soft-shadow border border-border dark:border-border',
+              'rounded-t-2xl sm:rounded-2xl max-h-[90dvh] sm:max-h-[85vh] flex flex-col',
+              'pb-[env(safe-area-inset-bottom)]',
               sizes[size],
               className
             )}
           >
             {title && (
-              <div className="flex items-center justify-between px-6 py-4 border-b border-border dark:border-slate-700">
-                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
+              <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-border dark:border-slate-700 shrink-0">
+                <h2 className="text-base sm:text-lg font-semibold text-slate-800 dark:text-slate-100 pr-2 truncate">
+                  {title}
+                </h2>
                 <button
                   onClick={onClose}
-                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 transition-colors"
+                  className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 transition-colors shrink-0"
+                  aria-label="Close"
                 >
                   <FaTimes size={14} />
                 </button>
               </div>
             )}
-            <div className="px-6 py-5 max-h-[70vh] overflow-y-auto scrollbar-thin">{children}</div>
+            <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto scrollbar-thin min-h-0 flex-1">
+              {children}
+            </div>
             {footer && (
-              <div className="px-6 py-4 border-t border-border dark:border-slate-700 flex flex-wrap justify-end gap-3">
+              <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-t border-border dark:border-slate-700 flex flex-wrap justify-end gap-2 sm:gap-3 shrink-0">
                 {footer}
               </div>
             )}

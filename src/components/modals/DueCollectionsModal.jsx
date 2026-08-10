@@ -64,7 +64,7 @@ export default function DueCollectionsModal() {
       }
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800">
             <p className="text-[10px] uppercase text-muted font-semibold">Overdue</p>
             <p className="text-lg font-bold text-red-600">{data.overdue.length}</p>
@@ -81,22 +81,23 @@ export default function DueCollectionsModal() {
 
         <div className="flex gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-700/50">
           {[
-            { id: 'overdue', label: 'Overdue', icon: FaExclamationTriangle },
-            { id: 'all', label: 'All pending', icon: FaClock },
-            { id: 'invoices', label: 'Invoice due', icon: FaBell },
+            { id: 'overdue', label: 'Overdue', short: 'Due', icon: FaExclamationTriangle },
+            { id: 'all', label: 'All pending', short: 'All', icon: FaClock },
+            { id: 'invoices', label: 'Invoice due', short: 'Inv', icon: FaBell },
           ].map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
+              className={`flex-1 flex items-center justify-center gap-1.5 px-1.5 sm:px-2 py-2 rounded-lg text-xs font-medium transition-colors ${
                 tab === t.id
                   ? 'bg-surface text-primary shadow-sm'
                   : 'text-muted hover:text-slate-700 dark:hover:text-slate-200'
               }`}
             >
-              <t.icon size={11} />
-              {t.label}
+              <t.icon size={11} className="shrink-0" />
+              <span className="sm:hidden truncate">{t.short}</span>
+              <span className="hidden sm:inline truncate">{t.label}</span>
             </button>
           ))}
         </div>

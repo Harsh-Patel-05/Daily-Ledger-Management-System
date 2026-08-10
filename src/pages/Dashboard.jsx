@@ -289,11 +289,11 @@ export default function Dashboard() {
               </Link>
             }
           />
-          <div className="overflow-x-auto scrollbar-thin">
+          <div className="overflow-x-auto scrollbar-thin -mx-1 min-w-0">
             {recentTxs.length === 0 ? (
               <p className="text-sm text-muted text-center py-10">No transactions yet</p>
             ) : (
-              <table className="w-full min-w-[700px]">
+              <table className="w-full min-w-[520px] text-sm">
                 <thead>
                   <tr className="border-b border-border dark:border-slate-700">
                     {['Date', 'Customer', 'Type', 'Description', 'Method', 'Amount'].map((h) => (

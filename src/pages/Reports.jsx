@@ -95,7 +95,7 @@ export default function Reports() {
               {todayTxs.length === 0 ? (
                 <p className="text-sm text-muted text-center py-10">No transactions today</p>
               ) : (
-                <table className="w-full min-w-[600px]">
+                <table className="w-full min-w-[480px]">
                   <thead>
                     <tr className="border-b border-border dark:border-slate-700">
                       {['Customer', 'Type', 'Description', 'Method', 'Amount'].map((h) => (
@@ -171,7 +171,7 @@ export default function Reports() {
             {customers.length === 0 ? (
               <p className="text-sm text-muted text-center py-10">No customers yet</p>
             ) : (
-              <table className="w-full min-w-[600px]">
+              <table className="w-full min-w-[480px]">
                 <thead>
                   <tr className="border-b border-border dark:border-slate-700">
                     {['Customer', 'Business', 'Balance', 'Credit Limit', 'Status', 'Last Txn'].map((h) => (

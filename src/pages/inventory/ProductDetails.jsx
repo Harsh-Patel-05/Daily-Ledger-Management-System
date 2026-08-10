@@ -83,9 +83,9 @@ export default function ProductDetails() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Current Stock" value={`${formatNumber(product.stockQty)} ${product.unit}`} icon={FaBoxOpen} color="blue" />
+        <StatCard title="Current Stock" value={formatNumber(product.stockQty)} icon={FaBoxOpen} color="blue" />
         <StatCard title="Stock Value" value={stockValue} icon={FaTag} color="green" />
-        <StatCard title="Selling Price" value={product.sellingPrice} icon={FaTag} color="purple" />
+        <StatCard title="Selling (ex-GST)" value={product.sellingPrice} icon={FaTag} color="purple" />
         <StatCard title="Margin" value={`${margin}%`} icon={FaTag} color="amber" />
       </div>
 
@@ -105,9 +105,10 @@ export default function ProductDetails() {
             <InfoRow icon={FaBarcode} label="Barcode" value={product.barcode || '—'} />
             <InfoRow icon={FaTag} label="Category" value={category?.name || 'Uncategorized'} />
             <InfoRow icon={FaTruck} label="Supplier" value={supplier?.name || '—'} />
+            <InfoRow icon={FaTag} label="Purchase Date" value={product.purchaseDate ? formatDate(product.purchaseDate) : '—'} />
             <InfoRow icon={FaMapMarkerAlt} label="Location" value={product.location || '—'} />
             <InfoRow icon={FaTag} label="HSN" value={product.hsn || '—'} />
-            <InfoRow icon={FaBoxOpen} label="Reorder Level" value={`${formatNumber(product.reorderLevel)} ${product.unit}`} />
+            <InfoRow icon={FaBoxOpen} label="Reorder Level" value={formatNumber(product.reorderLevel)} />
           </div>
 
           {product.description && (
@@ -121,10 +122,12 @@ export default function ProductDetails() {
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader title="Pricing" />
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <PriceTile label="Purchase" value={formatCurrency(product.purchasePrice)} />
-              <PriceTile label="Selling" value={formatCurrency(product.sellingPrice)} />
-              <PriceTile label="Tax" value={`${product.taxRate}%`} />
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <PriceTile label="Purchase (Without GST)" value={formatCurrency(product.purchasePriceWithoutGst ?? product.purchasePrice)} />
+              <PriceTile label="Purchase (With GST)" value={formatCurrency(product.purchasePriceWithGst)} />
+              <PriceTile label="GST %" value={`${product.taxRate}%`} />
+              <PriceTile label="Selling (Without GST)" value={formatCurrency(product.sellingPriceWithoutGst ?? product.sellingPrice)} />
+              <PriceTile label="Selling (With GST)" value={formatCurrency(product.sellingPriceWithGst)} />
               <PriceTile label="Reorder Qty" value={formatNumber(product.reorderQty)} />
             </div>
           </Card>

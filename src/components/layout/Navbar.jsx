@@ -342,10 +342,10 @@ export default function Navbar() {
             {sidebarCollapsed ? <FaExpandAlt size={14} /> : <FaCompressAlt size={14} />}
           </button>
 
-          <div className="min-w-0 hidden sm:block">
+          <div className="min-w-0 flex-1 sm:flex-none">
             <div className="min-w-0">
               {pageMeta.section && (
-                <p className="text-[10px] uppercase tracking-wider text-muted leading-none mb-0.5 truncate">
+                <p className="hidden sm:block text-[10px] uppercase tracking-wider text-muted leading-none mb-0.5 truncate">
                   {pageMeta.section}
                 </p>
               )}

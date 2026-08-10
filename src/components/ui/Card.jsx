@@ -18,8 +18,8 @@ export default function Card({ children, className = '', padding = true, hover =
 
 export function CardHeader({ title, subtitle, action, className = '' }) {
   return (
-    <div className={cn('flex items-start justify-between gap-4 mb-4', className)}>
-      <div>
+    <div className={cn('flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-4', className)}>
+      <div className="min-w-0">
         {title && <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">{title}</h3>}
         {subtitle && <p className="text-sm text-muted mt-0.5">{subtitle}</p>}
       </div>

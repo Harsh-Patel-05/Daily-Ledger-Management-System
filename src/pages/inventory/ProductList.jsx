@@ -8,7 +8,7 @@ import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
 import { useDebounce } from '../../hooks/useDebounce';
 import { usePagination } from '../../hooks/usePagination';
-import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { formatCurrency, formatNumber, formatDate } from '../../utils/formatters';
 import { filterBySearch, sortBy, getStatusColor } from '../../utils/helpers';
 import {
   Breadcrumbs, Card, SearchBox, Filter, Table, Pagination,
@@ -90,19 +90,32 @@ export default function ProductList() {
       render: (_, row) => (
         <div>
           <p className="font-semibold text-slate-800 dark:text-slate-100">
-            {formatNumber(row.stockQty)} <span className="text-xs font-normal text-muted">{row.unit}</span>
+            {formatNumber(row.stockQty)}
           </p>
           <div className="mt-1">{stockBadge(row)}</div>
         </div>
       ),
     },
     {
+      key: 'purchaseDate',
+      label: 'Purchase Date',
+      render: (v) => (v ? formatDate(v) : '—'),
+    },
+    {
       key: 'purchasePrice',
       label: 'Buy / Sell',
       render: (_, row) => (
-        <div className="text-sm">
-          <p className="text-muted">{formatCurrency(row.purchasePrice)}</p>
-          <p className="font-semibold text-slate-800 dark:text-slate-100">{formatCurrency(row.sellingPrice)}</p>
+        <div className="text-sm space-y-1">
+          <div>
+            <p className="text-[10px] uppercase text-muted">Without GST</p>
+            <p className="text-muted">{formatCurrency(row.purchasePriceWithoutGst ?? row.purchasePrice)} / {formatCurrency(row.sellingPriceWithoutGst ?? row.sellingPrice)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase text-muted">With GST ({row.taxRate ?? 18}%)</p>
+            <p className="font-semibold text-slate-800 dark:text-slate-100">
+              {formatCurrency(row.purchasePriceWithGst ?? row.purchasePrice)} / {formatCurrency(row.sellingPriceWithGst ?? row.sellingPrice)}
+            </p>
+          </div>
         </div>
       ),
     },
@@ -162,9 +175,6 @@ export default function ProductList() {
           <Link to="/inventory/categories">
             <Button variant="outline"><FaTags size={12} /> Categories</Button>
           </Link>
-          <Link to="/inventory/units">
-            <Button variant="outline"><FaBoxes size={12} /> Units</Button>
-          </Link>
           <Link to="/inventory/stock">
             <Button variant="outline"><FaExchangeAlt size={12} /> Stock</Button>
           </Link>
@@ -182,9 +192,12 @@ export default function ProductList() {
                   SKU: p.sku,
                   Category: getCategory(p.categoryId)?.name || '',
                   Stock: p.stockQty,
-                  Unit: p.unit,
-                  PurchasePrice: p.purchasePrice,
-                  SellingPrice: p.sellingPrice,
+                  PurchaseDate: p.purchaseDate || '',
+                  PurchaseWithoutGst: p.purchasePriceWithoutGst ?? p.purchasePrice,
+                  PurchaseWithGst: p.purchasePriceWithGst,
+                  SellingWithoutGst: p.sellingPriceWithoutGst ?? p.sellingPrice,
+                  SellingWithGst: p.sellingPriceWithGst,
+                  GstRate: p.taxRate,
                   ReorderLevel: p.reorderLevel,
                   Location: p.location || '',
                   Status: p.status,
@@ -208,56 +221,58 @@ export default function ProductList() {
       </div>
 
       <Card>
-        <div className="flex flex-col lg:flex-row gap-3 mb-5">
+        <div className="flex flex-col gap-3 mb-5">
           <SearchBox
             value={search}
             onChange={setSearch}
             placeholder="Search by name, SKU, barcode, HSN..."
-            className="flex-1"
+            className="w-full"
           />
-          <Filter
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            label="All Categories"
-            options={categories.map((c) => ({ value: c.id, label: c.name }))}
-          />
-          <Filter
-            value={statusFilter}
-            onChange={setStatusFilter}
-            label="All Status"
-            options={[
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Inactive' },
-              { value: 'discontinued', label: 'Discontinued' },
-            ]}
-          />
-          <Filter
-            value={stockFilter}
-            onChange={setStockFilter}
-            label="All Stock"
-            options={[
-              { value: 'ok', label: 'In Stock' },
-              { value: 'low', label: 'Low Stock' },
-              { value: 'out', label: 'Out of Stock' },
-            ]}
-          />
-          <div className="relative inline-flex items-center">
-            <FaSortAmountDown className="absolute left-3 text-slate-400" size={12} />
-            <select
-              value={`${sortKey}-${sortDir}`}
-              onChange={(e) => {
-                const [k, d] = e.target.value.split('-');
-                setSortKey(k);
-                setSortDir(d);
-              }}
-              className="appearance-none rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 pl-8 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
-            >
-              <option value="name-asc">Name A–Z</option>
-              <option value="name-desc">Name Z–A</option>
-              <option value="stockQty-asc">Stock Low–High</option>
-              <option value="stockQty-desc">Stock High–Low</option>
-              <option value="sellingPrice-desc">Price High–Low</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Filter
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              label="All Categories"
+              options={categories.map((c) => ({ value: c.id, label: c.name }))}
+            />
+            <Filter
+              value={statusFilter}
+              onChange={setStatusFilter}
+              label="All Status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'discontinued', label: 'Discontinued' },
+              ]}
+            />
+            <Filter
+              value={stockFilter}
+              onChange={setStockFilter}
+              label="All Stock"
+              options={[
+                { value: 'ok', label: 'In Stock' },
+                { value: 'low', label: 'Low Stock' },
+                { value: 'out', label: 'Out of Stock' },
+              ]}
+            />
+            <div className="relative inline-flex items-center w-full">
+              <FaSortAmountDown className="absolute left-3 text-slate-400" size={12} />
+              <select
+                value={`${sortKey}-${sortDir}`}
+                onChange={(e) => {
+                  const [k, d] = e.target.value.split('-');
+                  setSortKey(k);
+                  setSortDir(d);
+                }}
+                className="appearance-none w-full rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 pl-8 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+              >
+                <option value="name-asc">Name A–Z</option>
+                <option value="name-desc">Name Z–A</option>
+                <option value="stockQty-asc">Stock Low–High</option>
+                <option value="stockQty-desc">Stock High–Low</option>
+                <option value="sellingPrice-desc">Price High–Low</option>
+              </select>
+            </div>
           </div>
         </div>
 

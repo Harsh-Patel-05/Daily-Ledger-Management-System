@@ -42,14 +42,14 @@ export default function LowStock() {
       label: 'Current Stock',
       render: (_, row) => (
         <span className={Number(row.stockQty) <= 0 ? 'text-red-600 font-semibold' : 'text-amber-600 font-semibold'}>
-          {formatNumber(row.stockQty)} {row.unit}
+          {formatNumber(row.stockQty)}
         </span>
       ),
     },
     {
       key: 'reorderLevel',
       label: 'Reorder Level',
-      render: (v, row) => `${formatNumber(v)} ${row.unit || ''}`,
+      render: (v) => formatNumber(v),
     },
     {
       key: 'actions',

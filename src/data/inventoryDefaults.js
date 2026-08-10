@@ -1,5 +1,3 @@
-export const UNITS = ['pcs', 'kg', 'g', 'ltr', 'ml', 'box', 'dozen', 'm', 'pack', 'set'];
-
 export const PRODUCT_STATUSES = ['active', 'inactive', 'discontinued'];
 
 export const STOCK_MOVEMENT_TYPES = {
@@ -15,10 +13,12 @@ export const emptyProduct = {
   barcode: '',
   categoryId: '',
   supplierId: '',
-  description: '',
-  unit: 'pcs',
+    description: '',
+  purchaseDate: '',
   purchasePrice: 0,
+  purchasePriceWithGst: 0,
   sellingPrice: 0,
+  sellingPriceWithGst: 0,
   taxRate: 18,
   stockQty: 0,
   reorderLevel: 10,

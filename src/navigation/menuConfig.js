@@ -26,7 +26,6 @@ export const menuConfig = [
     children: [
       { to: '/inventory/products', label: 'Products' },
       { to: '/inventory/categories', label: 'Categories' },
-      { to: '/inventory/units', label: 'Units' },
       { to: '/inventory/stock', label: 'Stock' },
       { to: '/inventory/low-stock', label: 'Low Stock' },
       { to: '/inventory/stock-adjustment', label: 'Stock Adjustment' },

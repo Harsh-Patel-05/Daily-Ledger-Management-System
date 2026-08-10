@@ -40,12 +40,12 @@ export default function AppLayout() {
       <Sidebar />
       <div
         className={cn(
-          'transition-all duration-300',
+          'min-w-0 overflow-x-clip transition-all duration-300',
           sidebarCollapsed ? 'lg:ml-[72px]' : 'lg:ml-64'
         )}
       >
         <Navbar />
-        <main className="p-4 lg:p-6 max-w-[1400px]">
+        <main className="mx-auto w-full min-w-0 max-w-[1400px] p-4 lg:p-6">
           {showLoader ? (
             <PageLoader />
           ) : (

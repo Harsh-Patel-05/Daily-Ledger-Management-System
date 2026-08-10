@@ -33,7 +33,7 @@ export function toProductPayload(data, { includeStock = false } = {}) {
     categoryId: data.categoryId ? stripId(data.categoryId) : null,
     supplierId: data.supplierId ? stripId(data.supplierId) : null,
     description: data.description || '',
-    unit: data.unit || 'pcs',
+    purchaseDate: data.purchaseDate || null,
     purchasePrice: Number(data.purchasePrice) || 0,
     sellingPrice: Number(data.sellingPrice) || 0,
     taxRate: Number(data.taxRate) || 0,
@@ -117,29 +117,5 @@ export function createMovement(data) {
 
 export function getInventoryStats() {
   return api.get('/inventory/stats/');
-}
-
-export function toUnitPayload(data) {
-  return {
-    name: data.name,
-    shortName: data.shortName || '',
-    status: data.status || 'active',
-  };
-}
-
-export function listUnits(params = '') {
-  return fetchAll(`/inventory/units/${params ? `?${params}` : ''}`);
-}
-
-export function createUnit(data) {
-  return api.post('/inventory/units/', toUnitPayload(data));
-}
-
-export function updateUnit(id, data) {
-  return api.patch(`/inventory/units/${stripId(id)}/`, toUnitPayload(data));
-}
-
-export function deleteUnit(id) {
-  return api.delete(`/inventory/units/${stripId(id)}/`);
 }
 

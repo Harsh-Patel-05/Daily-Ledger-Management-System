@@ -284,7 +284,7 @@ export default function Settings() {
 
           <div>
             <p className="text-sm font-medium text-slate-700 dark:text-slate-200 mb-3">Color theme</p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
               {ACCENT_PRESETS.map((preset) => {
                 const selected = (form.accentColor || accent) === preset.id;
                 return (

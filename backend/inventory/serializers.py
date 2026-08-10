@@ -1,9 +1,8 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from rest_framework import serializers
 from accounts.ownership import data_owner
 from .models import (
     Category,
-    Unit,
     Supplier,
     Product,
     StockMovement,
@@ -16,6 +15,21 @@ def _dec(value, default='0'):
         return Decimal(str(value if value is not None else default))
     except (InvalidOperation, TypeError, ValueError):
         return Decimal(default)
+
+
+def _excl_from_incl(incl, tax_rate):
+    rate = _dec(tax_rate)
+    factor = Decimal('1') + (rate / Decimal('100'))
+    if factor <= 0:
+        return _dec(incl)
+    return (_dec(incl) / factor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+
+def _incl_from_excl(excl, tax_rate):
+    rate = _dec(tax_rate)
+    return (_dec(excl) * (Decimal('1') + rate / Decimal('100'))).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP
+    )
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -44,42 +58,6 @@ class CategorySerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['id'] = instance.pk
-        return data
-
-
-class UnitSerializer(serializers.ModelSerializer):
-    shortName = serializers.CharField(source='short_name', required=False, allow_blank=True)
-
-    class Meta:
-        model = Unit
-        fields = (
-            'id', 'name', 'short_name', 'shortName', 'status',
-            'created_at', 'updated_at',
-        )
-        read_only_fields = ('id', 'created_at', 'updated_at')
-        extra_kwargs = {'short_name': {'required': False}}
-
-    def validate_name(self, value):
-        value = (value or '').strip()
-        if not value:
-            raise serializers.ValidationError('Unit name is required')
-        request = self.context['request']
-        owner = data_owner(request.user)
-        qs = Unit.objects.filter(owner=owner, name__iexact=value)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError('Unit with this name already exists')
-        return value
-
-    def create(self, validated):
-        validated['owner'] = data_owner(self.context['request'].user)
-        return super().create(validated)
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        data['id'] = instance.pk
-        data['shortName'] = data.get('short_name') or ''
         return data
 
 
@@ -126,8 +104,18 @@ class ProductSerializer(serializers.ModelSerializer):
     purchasePrice = serializers.DecimalField(
         source='purchase_price', max_digits=12, decimal_places=2, required=False
     )
+    purchaseDate = serializers.DateField(
+        source='purchase_date', required=False, allow_null=True
+    )
     sellingPrice = serializers.DecimalField(
         source='selling_price', max_digits=12, decimal_places=2, required=False
+    )
+    # Inclusive (with GST) write helpers — convert to exclusive before save
+    purchasePriceWithGst = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, write_only=True
+    )
+    sellingPriceWithGst = serializers.DecimalField(
+        max_digits=12, decimal_places=2, required=False, write_only=True
     )
     taxRate = serializers.DecimalField(
         source='tax_rate', max_digits=5, decimal_places=2, required=False
@@ -146,8 +134,10 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = (
             'id', 'name', 'sku', 'barcode', 'category', 'categoryId',
-            'supplier', 'supplierId', 'description', 'unit',
-            'purchase_price', 'purchasePrice', 'selling_price', 'sellingPrice',
+            'supplier', 'supplierId', 'description',
+            'purchase_date', 'purchaseDate',
+            'purchase_price', 'purchasePrice', 'purchasePriceWithGst',
+            'selling_price', 'sellingPrice', 'sellingPriceWithGst',
             'tax_rate', 'taxRate', 'stock_qty', 'stockQty',
             'reorder_level', 'reorderLevel', 'reorder_qty', 'reorderQty',
             'location', 'status', 'hsn', 'created_at', 'updated_at',
@@ -156,6 +146,7 @@ class ProductSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'category': {'required': False, 'allow_null': True},
             'supplier': {'required': False, 'allow_null': True},
+            'purchase_date': {'required': False, 'allow_null': True},
             'purchase_price': {'required': False},
             'selling_price': {'required': False},
             'tax_rate': {'required': False},
@@ -202,9 +193,29 @@ class ProductSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if 'purchase_date' in attrs and attrs['purchase_date'] == '':
+            attrs['purchase_date'] = None
+
         for key in ('purchase_price', 'selling_price', 'tax_rate', 'reorder_level', 'reorder_qty'):
             if key in attrs and attrs[key] is not None and Decimal(attrs[key]) < 0:
                 raise serializers.ValidationError({key: 'Must be zero or greater'})
+
+        tax = attrs.get('tax_rate')
+        if tax is None and self.instance is not None:
+            tax = self.instance.tax_rate
+        if tax is None:
+            tax = Decimal('18')
+
+        # Prefer with-GST payloads when provided (Excel-style rates)
+        if 'purchasePriceWithGst' in attrs and attrs['purchasePriceWithGst'] is not None:
+            attrs['purchase_price'] = _excl_from_incl(attrs.pop('purchasePriceWithGst'), tax)
+        else:
+            attrs.pop('purchasePriceWithGst', None)
+
+        if 'sellingPriceWithGst' in attrs and attrs['sellingPriceWithGst'] is not None:
+            attrs['selling_price'] = _excl_from_incl(attrs.pop('sellingPriceWithGst'), tax)
+        else:
+            attrs.pop('sellingPriceWithGst', None)
 
         # opening stock only on create
         if self.instance is None:
@@ -225,12 +236,19 @@ class ProductSerializer(serializers.ModelSerializer):
         if 'supplierId' in self.initial_data or 'supplier_id' in self.initial_data:
             attrs['supplier'] = self._resolve_fk(Supplier, raw_sup, 'supplierId')
 
+        attrs.pop('categoryId', None)
+        attrs.pop('supplierId', None)
+
         return attrs
 
     def create(self, validated):
         request = self.context['request']
         owner = data_owner(request.user)
         opening = Decimal(validated.pop('stock_qty', 0) or 0)
+        validated.pop('categoryId', None)
+        validated.pop('supplierId', None)
+        validated.pop('purchasePriceWithGst', None)
+        validated.pop('sellingPriceWithGst', None)
         validated['stock_qty'] = Decimal('0')
         validated['owner'] = owner
         product = super().create(validated)
@@ -245,14 +263,30 @@ class ProductSerializer(serializers.ModelSerializer):
             product.refresh_from_db()
         return product
 
+    def update(self, instance, validated):
+        validated.pop('categoryId', None)
+        validated.pop('supplierId', None)
+        validated.pop('purchasePriceWithGst', None)
+        validated.pop('sellingPriceWithGst', None)
+        validated.pop('stock_qty', None)
+        return super().update(instance, validated)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['id'] = instance.pk
         data['categoryId'] = instance.category_id or ''
         data['supplierId'] = instance.supplier_id or ''
-        data['purchasePrice'] = float(instance.purchase_price or 0)
-        data['sellingPrice'] = float(instance.selling_price or 0)
-        data['taxRate'] = float(instance.tax_rate or 0)
+        tax = float(instance.tax_rate or 0)
+        purchase = float(instance.purchase_price or 0)
+        selling = float(instance.selling_price or 0)
+        data['purchasePrice'] = purchase
+        data['sellingPrice'] = selling
+        data['taxRate'] = tax
+        data['purchaseDate'] = instance.purchase_date.isoformat() if instance.purchase_date else ''
+        data['purchasePriceWithoutGst'] = purchase
+        data['sellingPriceWithoutGst'] = selling
+        data['purchasePriceWithGst'] = float(instance.purchase_price_with_gst)
+        data['sellingPriceWithGst'] = float(instance.selling_price_with_gst)
         data['stockQty'] = float(instance.stock_qty or 0)
         data['reorderLevel'] = float(instance.reorder_level or 0)
         data['reorderQty'] = float(instance.reorder_qty or 0)

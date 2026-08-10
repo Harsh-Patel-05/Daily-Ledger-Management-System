@@ -70,7 +70,7 @@ export default function CustomerList() {
       key: 'currentBalance',
       label: 'Balance / Limit',
       render: (_, row) => (
-        <div className="min-w-[120px]">
+        <div className="min-w-0 w-full max-w-[160px]">
           <p className={`text-sm font-semibold ${row.currentBalance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
             {formatCurrency(row.currentBalance)}
           </p>
@@ -102,7 +102,7 @@ export default function CustomerList() {
       key: 'actions',
       label: 'Actions',
       render: (_, row) => (
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex flex-wrap items-center justify-end gap-0.5 sm:gap-1" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => openModal('viewCustomer', { customerId: row.id })} className="p-2 rounded-lg hover:bg-blue-50 text-blue-600 dark:hover:bg-blue-900/30" title="Quick view">
             <FaEye size={13} />
           </button>
@@ -148,40 +148,42 @@ export default function CustomerList() {
       </div>
 
       <Card>
-        <div className="flex flex-col sm:flex-row gap-3 mb-5">
+        <div className="flex flex-col gap-3 mb-5">
           <SearchBox
             value={search}
             onChange={setSearch}
             placeholder="Search by name, phone, business, GST..."
-            className="flex-1"
+            className="w-full"
           />
-          <Filter
-            value={statusFilter}
-            onChange={setStatusFilter}
-            label="All Status"
-            options={[
-              { value: 'active', label: 'Active' },
-              { value: 'inactive', label: 'Inactive' },
-              { value: 'overdue', label: 'Overdue' },
-            ]}
-          />
-          <div className="relative inline-flex items-center">
-            <FaSortAmountDown className="absolute left-3 text-slate-400" size={12} />
-            <select
-              value={`${sortKey}-${sortDir}`}
-              onChange={(e) => {
-                const [k, d] = e.target.value.split('-');
-                setSortKey(k);
-                setSortDir(d);
-              }}
-              className="appearance-none rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 pl-8 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
-            >
-              <option value="name-asc">Name A–Z</option>
-              <option value="name-desc">Name Z–A</option>
-              <option value="currentBalance-desc">Balance High–Low</option>
-              <option value="currentBalance-asc">Balance Low–High</option>
-              <option value="lastTransaction-desc">Recent First</option>
-            </select>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Filter
+              value={statusFilter}
+              onChange={setStatusFilter}
+              label="All Status"
+              options={[
+                { value: 'active', label: 'Active' },
+                { value: 'inactive', label: 'Inactive' },
+                { value: 'overdue', label: 'Overdue' },
+              ]}
+            />
+            <div className="relative inline-flex items-center w-full">
+              <FaSortAmountDown className="absolute left-3 text-slate-400" size={12} />
+              <select
+                value={`${sortKey}-${sortDir}`}
+                onChange={(e) => {
+                  const [k, d] = e.target.value.split('-');
+                  setSortKey(k);
+                  setSortDir(d);
+                }}
+                className="appearance-none w-full rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 pl-8 pr-8 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 cursor-pointer"
+              >
+                <option value="name-asc">Name A–Z</option>
+                <option value="name-desc">Name Z–A</option>
+                <option value="currentBalance-desc">Balance High–Low</option>
+                <option value="currentBalance-asc">Balance Low–High</option>
+                <option value="lastTransaction-desc">Recent First</option>
+              </select>
+            </div>
           </div>
         </div>
 

@@ -272,8 +272,8 @@ export default function Ledger() {
           {ledgerEntries.entries.length > 0 && (
             <Card>
               <CardHeader title="Ledger Statement (Table View)" />
-              <div className="overflow-x-auto scrollbar-thin">
-                <table className="w-full min-w-[700px]">
+              <div className="overflow-x-auto scrollbar-thin -mx-1 min-w-0">
+                <table className="w-full min-w-[520px] text-sm">
                   <thead>
                     <tr className="border-b border-border dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
                       {['Date', 'Particulars', 'Type', 'Credit (Dr)', 'Payment (Cr)', 'Balance'].map((h) => (

@@ -104,7 +104,7 @@ export default function StockAdjustment() {
             <Input label="Date" type="date" value={form.date} onChange={set('date')} />
             <Input
               label="Current Stock"
-              value={product ? `${formatNumber(product.stockQty)} ${product.unit || ''}` : '—'}
+              value={product ? formatNumber(product.stockQty) : '—'}
               disabled
             />
             <Input

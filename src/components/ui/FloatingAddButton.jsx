@@ -10,7 +10,7 @@ export default function FloatingAddButton({ to, onClick, label = 'Add' }) {
     <motion.div
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
-      className="fixed bottom-6 right-6 z-40 no-print"
+      className="fixed z-40 no-print bottom-[max(1.5rem,env(safe-area-inset-bottom))] right-[max(1.5rem,env(safe-area-inset-right))]"
     >
       {to ? (
         <Link to={to} className={className}>

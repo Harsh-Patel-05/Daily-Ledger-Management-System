@@ -114,25 +114,28 @@ export default function TransactionList() {
       </div>
 
       <Card>
-        <div className="flex flex-col lg:flex-row gap-3 mb-5 flex-wrap">
-          <SearchBox value={search} onChange={setSearch} placeholder="Search transactions..." className="flex-1 min-w-[200px]" />
-          <Filter
-            value={typeFilter}
-            onChange={setTypeFilter}
-            label="All Types"
-            options={Object.entries(TRANSACTION_TYPES).map(([k, v]) => ({ value: k, label: v.label }))}
-          />
-          <DatePicker label="" value={fromDate} onChange={setFromDate} className="w-auto" />
-          <DatePicker label="" value={toDate} onChange={setToDate} className="w-auto" />
-          {(fromDate || toDate || typeFilter) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { setFromDate(''); setToDate(''); setTypeFilter(''); }}
-            >
-              Clear filters
-            </Button>
-          )}
+        <div className="flex flex-col gap-3 mb-5">
+          <SearchBox value={search} onChange={setSearch} placeholder="Search transactions..." className="w-full" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <Filter
+              value={typeFilter}
+              onChange={setTypeFilter}
+              label="All Types"
+              options={Object.entries(TRANSACTION_TYPES).map(([k, v]) => ({ value: k, label: v.label }))}
+            />
+            <DatePicker label="" value={fromDate} onChange={setFromDate} className="w-full" />
+            <DatePicker label="" value={toDate} onChange={setToDate} className="w-full" />
+            {(fromDate || toDate || typeFilter) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full sm:w-auto justify-center"
+                onClick={() => { setFromDate(''); setToDate(''); setTypeFilter(''); }}
+              >
+                Clear filters
+              </Button>
+            )}
+          </div>
         </div>
 
         {filtered.length === 0 ? (

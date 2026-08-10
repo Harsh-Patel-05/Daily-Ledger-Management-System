@@ -51,7 +51,7 @@ export const TOUR_STEPS = [
     id: 'nav-inventory',
     target: 'nav-inventory',
     title: 'Inventory',
-    body: 'Products, Categories, Units, Stock, Low Stock, and Stock Adjustment. Keep stock ready before billing.',
+    body: 'Products, Categories, Stock, Low Stock, and Stock Adjustment. Keep stock ready before billing.',
     placement: 'right',
     route: '/inventory/products',
     openSection: 'inventory',

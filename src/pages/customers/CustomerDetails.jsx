@@ -137,7 +137,7 @@ export default function CustomerDetails() {
               <p className="text-sm text-muted text-center py-8">No transactions yet</p>
             ) : (
               <div className="overflow-x-auto scrollbar-thin">
-                <table className="w-full min-w-[500px]">
+                <table className="w-full min-w-[420px]">
                   <thead>
                     <tr className="border-b border-border dark:border-slate-700">
                       {['Date', 'Type', 'Description', 'Amount'].map((h) => (

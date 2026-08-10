@@ -7,10 +7,9 @@ from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from accounts.ownership import data_owner
 from notifications.models import ActivityLog
-from .models import Category, Unit, Supplier, Product, StockMovement
+from .models import Category, Supplier, Product, StockMovement
 from .serializers import (
     CategorySerializer,
-    UnitSerializer,
     SupplierSerializer,
     ProductSerializer,
     StockMovementSerializer,
@@ -48,34 +47,6 @@ class CategoryViewSet(viewsets.ModelViewSet):
             message=f'Category deleted: {name}',
         )
 
-
-class UnitViewSet(viewsets.ModelViewSet):
-    serializer_class = UnitSerializer
-    search_fields = ['name', 'short_name']
-    ordering_fields = ['name', 'created_at']
-    ordering = ['name']
-
-    def get_queryset(self):
-        return Unit.objects.filter(owner=data_owner(self.request.user))
-
-    def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        unit = serializer.save(owner=owner)
-        ActivityLog.objects.create(
-            owner=owner,
-            type='inventory',
-            message=f'Unit added: {unit.name}',
-        )
-
-    def perform_destroy(self, instance):
-        name = instance.name
-        owner = data_owner(self.request.user)
-        instance.delete()
-        ActivityLog.objects.create(
-            owner=owner,
-            type='inventory',
-            message=f'Unit deleted: {name}',
-        )
 
 
 class SupplierViewSet(viewsets.ModelViewSet):

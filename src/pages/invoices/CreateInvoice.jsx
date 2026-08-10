@@ -235,7 +235,7 @@ export default function CreateInvoice() {
                         <option value="">Custom item (manual)</option>
                         {activeProducts.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} · stock {formatNumber(p.stockQty)} {p.unit}
+                            {p.name} · stock {formatNumber(p.stockQty)}
                           </option>
                         ))}
                       </select>
@@ -249,8 +249,8 @@ export default function CreateInvoice() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-4 sm:col-span-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                    <div className="sm:col-span-2">
                       <Input
                         label={idx === 0 ? 'HSN' : undefined}
                         value={item.hsn}
@@ -258,42 +258,46 @@ export default function CreateInvoice() {
                         placeholder="HSN"
                       />
                     </div>
-                    <div className="col-span-4 sm:col-span-2">
-                      <Input
-                        label={idx === 0 ? 'Qty' : undefined}
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                        min="1"
-                      />
+                    <div className="grid grid-cols-2 sm:contents gap-2">
+                      <div className="sm:col-span-2">
+                        <Input
+                          label={idx === 0 ? 'Qty' : undefined}
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
+                          min="1"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <Input
+                          label={idx === 0 ? 'Rate' : undefined}
+                          type="number"
+                          value={item.rate}
+                          onChange={(e) => updateItem(item.id, 'rate', e.target.value)}
+                          placeholder="0"
+                        />
+                      </div>
                     </div>
-                    <div className="col-span-4 sm:col-span-3">
-                      <Input
-                        label={idx === 0 ? 'Rate' : undefined}
-                        type="number"
-                        value={item.rate}
-                        onChange={(e) => updateItem(item.id, 'rate', e.target.value)}
-                        placeholder="0"
-                      />
-                    </div>
-                    <div className="col-span-8 sm:col-span-3">
-                      <Input label={idx === 0 ? 'Amount' : undefined} value={formatCurrency(item.amount)} disabled />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2 flex justify-end pb-1">
-                      {form.items.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setForm((f) => ({ ...f, items: f.items.filter((i) => i.id !== item.id) }))}
-                          className="p-2.5 rounded-lg text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
-                        >
-                          <FaTrash size={12} />
-                        </button>
-                      )}
+                    <div className="grid grid-cols-[1fr_auto] sm:contents gap-2 items-end">
+                      <div className="sm:col-span-3">
+                        <Input label={idx === 0 ? 'Amount' : undefined} value={formatCurrency(item.amount)} disabled />
+                      </div>
+                      <div className="sm:col-span-2 flex justify-end pb-1">
+                        {form.items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, items: f.items.filter((i) => i.id !== item.id) }))}
+                            className="p-2.5 rounded-lg text-danger hover:bg-red-50 dark:hover:bg-red-900/30"
+                          >
+                            <FaTrash size={12} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {linked && (
                     <p className="text-[11px] text-muted">
-                      Stock after sale: {formatNumber(Math.max(0, Number(linked.stockQty) - (Number(item.quantity) || 0)))} {linked.unit}
+                      Stock after sale: {formatNumber(Math.max(0, Number(linked.stockQty) - (Number(item.quantity) || 0)))}
                       {Number(item.quantity) > Number(linked.stockQty) && (
                         <span className="text-danger ml-2">Insufficient stock</span>
                       )}

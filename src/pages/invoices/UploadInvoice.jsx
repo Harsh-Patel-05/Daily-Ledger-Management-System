@@ -296,8 +296,8 @@ export default function UploadInvoice() {
                 </div>
                 <div className="space-y-2 max-h-56 overflow-y-auto scrollbar-thin">
                   {extracted.items.map((item) => (
-                    <div key={item.id} className="grid grid-cols-12 gap-1.5 items-center">
-                      <div className="col-span-5">
+                    <div key={item.id} className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-1.5 items-center">
+                      <div className="sm:col-span-5">
                         <input
                           value={item.description}
                           onChange={(e) => updateItem(item.id, 'description', e.target.value)}
@@ -305,43 +305,49 @@ export default function UploadInvoice() {
                           className="w-full rounded-lg border border-border dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs"
                         />
                       </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
-                          className="w-full rounded-lg border border-border dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <input
-                          type="number"
-                          value={item.rate}
-                          onChange={(e) => updateItem(item.id, 'rate', e.target.value)}
-                          className="w-full rounded-lg border border-border dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs"
-                        />
-                      </div>
-                      <div className="col-span-2 text-xs font-semibold text-right">{formatCurrency(item.amount)}</div>
-                      <div className="col-span-1">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setExtracted((prev) => {
-                              const items = prev.items.filter((i) => i.id !== item.id);
-                              return { ...prev, items, ...calcInvoiceTotals(items, prev.discount, prev.taxRate) };
-                            })
-                          }
-                          className="p-1.5 text-danger"
-                        >
-                          <FaTrash size={10} />
-                        </button>
+                      <div className="grid grid-cols-4 sm:contents gap-2">
+                        <div className="sm:col-span-2">
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={(e) => updateItem(item.id, 'quantity', e.target.value)}
+                            placeholder="Qty"
+                            className="w-full rounded-lg border border-border dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs"
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <input
+                            type="number"
+                            value={item.rate}
+                            onChange={(e) => updateItem(item.id, 'rate', e.target.value)}
+                            placeholder="Rate"
+                            className="w-full rounded-lg border border-border dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs"
+                          />
+                        </div>
+                        <div className="sm:col-span-2 text-xs font-semibold text-right flex items-center justify-end">
+                          {formatCurrency(item.amount)}
+                        </div>
+                        <div className="sm:col-span-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExtracted((prev) => {
+                                const items = prev.items.filter((i) => i.id !== item.id);
+                                return { ...prev, items, ...calcInvoiceTotals(items, prev.discount, prev.taxRate) };
+                              })
+                            }
+                            className="p-1.5 text-danger"
+                          >
+                            <FaTrash size={10} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Input
                   label="Discount"
                   type="number"

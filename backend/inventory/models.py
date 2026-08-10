@@ -27,31 +27,6 @@ class Category(models.Model):
         return self.name
 
 
-class Unit(models.Model):
-    class Status(models.TextChoices):
-        ACTIVE = 'active', 'Active'
-        INACTIVE = 'inactive', 'Inactive'
-
-    owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='inventory_units',
-    )
-    name = models.CharField(max_length=120)
-    short_name = models.CharField(max_length=20, blank=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['name']
-        unique_together = [('owner', 'name')]
-        indexes = [models.Index(fields=['owner', 'name'])]
-
-    def __str__(self):
-        return self.short_name or self.name
-
-
 class Supplier(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -82,18 +57,6 @@ class Product(models.Model):
         INACTIVE = 'inactive', 'Inactive'
         DISCONTINUED = 'discontinued', 'Discontinued'
 
-    class Unit(models.TextChoices):
-        PCS = 'pcs', 'pcs'
-        KG = 'kg', 'kg'
-        G = 'g', 'g'
-        LTR = 'ltr', 'ltr'
-        ML = 'ml', 'ml'
-        BOX = 'box', 'box'
-        DOZEN = 'dozen', 'dozen'
-        M = 'm', 'm'
-        PACK = 'pack', 'pack'
-        SET = 'set', 'set'
-
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -117,7 +80,8 @@ class Product(models.Model):
         related_name='products',
     )
     description = models.TextField(blank=True)
-    unit = models.CharField(max_length=20, choices=Unit.choices, default=Unit.PCS)
+    purchase_date = models.DateField(null=True, blank=True)
+    # purchase_price / selling_price are WITHOUT GST (tax exclusive)
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
@@ -136,6 +100,7 @@ class Product(models.Model):
             models.Index(fields=['owner', 'name']),
             models.Index(fields=['owner', 'sku']),
             models.Index(fields=['owner', 'status']),
+            models.Index(fields=['owner', 'purchase_date']),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -147,6 +112,16 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def purchase_price_with_gst(self):
+        rate = Decimal(self.tax_rate or 0)
+        return (Decimal(self.purchase_price or 0) * (1 + rate / Decimal('100'))).quantize(Decimal('0.01'))
+
+    @property
+    def selling_price_with_gst(self):
+        rate = Decimal(self.tax_rate or 0)
+        return (Decimal(self.selling_price or 0) * (1 + rate / Decimal('100'))).quantize(Decimal('0.01'))
 
     @property
     def is_low_stock(self):

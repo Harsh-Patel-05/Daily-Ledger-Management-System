@@ -189,13 +189,13 @@ export default function QuickCreateInvoiceModal() {
             <option value="">Custom item (manual)</option>
             {activeProducts.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} · stock {formatNumber(p.stockQty)} {p.unit} · {formatCurrency(p.sellingPrice)}
+                {p.name} · stock {formatNumber(p.stockQty)} · {formatCurrency(p.sellingPrice)}
               </option>
             ))}
           </select>
           {linked && (
             <p className="text-[11px] text-muted mt-1">
-              Available: {formatNumber(linked.stockQty)} {linked.unit}
+              Available: {formatNumber(linked.stockQty)}
             </p>
           )}
         </div>

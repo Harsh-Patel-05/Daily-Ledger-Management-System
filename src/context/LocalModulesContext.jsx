@@ -2,7 +2,6 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { useAuth } from './AuthContext';
 import * as purchaseApi from '../api/purchase';
 import * as expensesApi from '../api/expenses';
-import * as inventoryApi from '../api/inventory';
 import * as openingBalancesApi from '../api/openingBalances';
 import * as salesReturnsApi from '../api/salesReturns';
 import * as usersApi from '../api/users';
@@ -65,13 +64,6 @@ function useApiCollection({ listFn, createFn, updateFn, removeFn, afterMutate })
 export function LocalModulesProvider({ children }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [ready, setReady] = useState(false);
-
-  const units = useApiCollection({
-    listFn: inventoryApi.listUnits,
-    createFn: inventoryApi.createUnit,
-    updateFn: inventoryApi.updateUnit,
-    removeFn: inventoryApi.deleteUnit,
-  });
 
   const expenseCategories = useApiCollection({
     listFn: expensesApi.listCategories,
@@ -156,7 +148,6 @@ export function LocalModulesProvider({ children }) {
   const refreshAll = useCallback(async () => {
     if (!isAuthenticated) return;
     const results = await Promise.allSettled([
-      units.refresh(),
       expenseCategories.refresh(),
       expenses.refresh(),
       purchaseBills.refresh(),
@@ -175,7 +166,6 @@ export function LocalModulesProvider({ children }) {
     setReady(true);
   }, [
     isAuthenticated,
-    units.refresh,
     expenseCategories.refresh,
     expenses.refresh,
     purchaseBills.refresh,
@@ -189,7 +179,6 @@ export function LocalModulesProvider({ children }) {
   ]);
 
   const clearLocal = useCallback(() => {
-    units.setItems([]);
     expenseCategories.setItems([]);
     expenses.setItems([]);
     purchaseBills.setItems([]);
@@ -202,7 +191,6 @@ export function LocalModulesProvider({ children }) {
     permissions.setItems([]);
     setReady(false);
   }, [
-    units.setItems,
     expenseCategories.setItems,
     expenses.setItems,
     purchaseBills.setItems,
@@ -271,14 +259,6 @@ export function LocalModulesProvider({ children }) {
     [expenses.refresh]
   );
 
-  const unitOptions = useMemo(() => {
-    const active = units.items.filter((u) => u.status !== 'inactive');
-    return active.map((u) => ({
-      value: u.shortName || u.name,
-      label: u.shortName ? `${u.name} (${u.shortName})` : u.name,
-    }));
-  }, [units.items]);
-
   const supplierPayables = useMemo(() => {
     const map = {};
     purchaseBills.items.forEach((b) => {
@@ -291,8 +271,6 @@ export function LocalModulesProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      units,
-      unitOptions,
       expenseCategories,
       expenses,
       addExpense,
@@ -311,8 +289,6 @@ export function LocalModulesProvider({ children }) {
       refreshAll,
     }),
     [
-      units,
-      unitOptions,
       expenseCategories,
       expenses,
       addExpense,

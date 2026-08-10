@@ -101,14 +101,14 @@ export default function QuickStockModal() {
             <option value="">Select product</option>
             {products.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ({formatNumber(p.stockQty)} {p.unit})
+                {p.name} ({formatNumber(p.stockQty)})
               </option>
             ))}
           </select>
           {errors.productId && <p className="text-xs text-danger mt-1">{errors.productId}</p>}
           {selected && (
             <p className="text-xs text-muted mt-1.5">
-              Current stock: {formatNumber(selected.stockQty)} {selected.unit}
+              Current stock: {formatNumber(selected.stockQty)}
             </p>
           )}
         </div>

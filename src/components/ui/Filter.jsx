@@ -9,13 +9,13 @@ export default function Filter({
   className = '',
 }) {
   return (
-    <div className={cn('relative inline-flex items-center', className)}>
+    <div className={cn('relative inline-flex items-center w-full sm:w-auto', className)}>
       <FaFilter className="absolute left-3 text-slate-400 pointer-events-none" size={12} />
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
-          'appearance-none rounded-xl border border-border bg-white pl-8 pr-8 py-2.5 text-sm',
+          'appearance-none rounded-xl border border-border bg-white pl-8 pr-8 py-2.5 text-sm w-full sm:w-auto',
           'focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary',
           'dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100',
           'cursor-pointer transition-all duration-200'

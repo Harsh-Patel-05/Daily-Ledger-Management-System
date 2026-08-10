@@ -29,7 +29,7 @@ export function stockIssuesForItems(items = [], getProduct) {
     if (qty <= 0) continue;
     if (qty > Number(product.stockQty || 0)) {
       issues.push(
-        `${product.name}: need ${qty} ${product.unit}, only ${product.stockQty} in stock`
+        `${product.name}: need ${qty}, only ${product.stockQty} in stock`
       );
     }
   }

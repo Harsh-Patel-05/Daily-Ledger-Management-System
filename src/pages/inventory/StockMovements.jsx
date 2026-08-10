@@ -282,14 +282,14 @@ export default function StockMovements() {
               <option value="">Select product</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} ({formatNumber(p.stockQty)} {p.unit})
+                  {p.name} ({formatNumber(p.stockQty)})
                 </option>
               ))}
             </select>
             {errors.productId && <p className="text-xs text-danger mt-1">{errors.productId}</p>}
             {selectedProduct && (
               <p className="text-xs text-muted mt-1.5 flex items-center gap-1">
-                <FaExchangeAlt size={10} /> Current stock: {formatNumber(selectedProduct.stockQty)} {selectedProduct.unit}
+                <FaExchangeAlt size={10} /> Current stock: {formatNumber(selectedProduct.stockQty)}
               </p>
             )}
           </div>

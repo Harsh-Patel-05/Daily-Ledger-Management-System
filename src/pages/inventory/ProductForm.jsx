@@ -2,25 +2,12 @@ import { useMemo } from 'react';
 import { PRODUCT_STATUSES } from '../../data/inventoryDefaults';
 import { Input, Button, DatePicker } from '../../components/ui';
 
-function withGst(excl, taxRate) {
-  const e = Number(excl) || 0;
-  const t = Number(taxRate) || 0;
-  return Math.round(e * (1 + t / 100) * 100) / 100;
-}
-
-function withoutGst(incl, taxRate) {
-  const i = Number(incl) || 0;
-  const t = Number(taxRate) || 0;
-  const factor = 1 + t / 100;
-  if (!factor) return i;
-  return Math.round((i / factor) * 100) / 100;
-}
-
 export default function ProductForm({
   form,
   setForm,
   errors = {},
   categories = [],
+  brands = [],
   suppliers = [],
   loading = false,
   submitLabel = 'Save Product',
@@ -30,40 +17,12 @@ export default function ProductForm({
 }) {
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  const setExcl = (exclKey, inclKey) => (e) => {
-    const excl = e.target.value;
-    setForm((f) => ({
-      ...f,
-      [exclKey]: excl,
-      [inclKey]: withGst(excl, f.taxRate),
-    }));
-  };
-
-  const setIncl = (exclKey, inclKey) => (e) => {
-    const incl = e.target.value;
-    setForm((f) => ({
-      ...f,
-      [inclKey]: incl,
-      [exclKey]: withoutGst(incl, f.taxRate),
-    }));
-  };
-
-  const setTaxRate = (e) => {
-    const taxRate = e.target.value;
-    setForm((f) => ({
-      ...f,
-      taxRate,
-      purchasePriceWithGst: withGst(f.purchasePrice, taxRate),
-      sellingPriceWithGst: withGst(f.sellingPrice, taxRate),
-    }));
-  };
-
   const margin = useMemo(() => {
-    const buy = Number(form.purchasePrice) || 0;
-    const sell = Number(form.sellingPrice) || 0;
+    const buy = Number(form.purchasePrice) || Number(form.purchasePriceWithGst) || 0;
+    const sell = Number(form.sellingPrice) || Number(form.sellingPriceWithGst) || 0;
     if (!buy) return null;
     return Math.round(((sell - buy) / buy) * 100);
-  }, [form.purchasePrice, form.sellingPrice]);
+  }, [form.purchasePrice, form.purchasePriceWithGst, form.sellingPrice, form.sellingPriceWithGst]);
 
   return (
     <form onSubmit={onSubmit} className="space-y-5">
@@ -76,25 +35,20 @@ export default function ProductForm({
           error={errors.name}
           required
         />
-        <Input
-          label="SKU"
-          value={form.sku}
-          onChange={set('sku')}
-          placeholder="SKU"
-          error={errors.sku}
-        />
-        <Input
-          label="Barcode"
-          value={form.barcode}
-          onChange={set('barcode')}
-          placeholder="Optional barcode"
-        />
-        <Input
-          label="HSN Code"
-          value={form.hsn}
-          onChange={set('hsn')}
-          placeholder="HSN code"
-        />
+
+        <div>
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Company / Brand</label>
+          <select
+            value={form.brandId}
+            onChange={set('brandId')}
+            className="w-full rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+          >
+            <option value="">Select brand</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
 
         <div>
           <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Category</label>
@@ -147,7 +101,7 @@ export default function ProductForm({
           label="GST Rate (%)"
           type="number"
           value={form.taxRate}
-          onChange={setTaxRate}
+          onChange={set('taxRate')}
           placeholder="18"
         />
 
@@ -155,7 +109,7 @@ export default function ProductForm({
           label="Purchase Price (Without GST)"
           type="number"
           value={form.purchasePrice}
-          onChange={setExcl('purchasePrice', 'purchasePriceWithGst')}
+          onChange={set('purchasePrice')}
           placeholder="0"
           error={errors.purchasePrice}
         />
@@ -163,14 +117,14 @@ export default function ProductForm({
           label="Purchase Price (With GST)"
           type="number"
           value={form.purchasePriceWithGst ?? ''}
-          onChange={setIncl('purchasePrice', 'purchasePriceWithGst')}
+          onChange={set('purchasePriceWithGst')}
           placeholder="0"
         />
         <Input
           label="Selling Price (Without GST)"
           type="number"
           value={form.sellingPrice}
-          onChange={setExcl('sellingPrice', 'sellingPriceWithGst')}
+          onChange={set('sellingPrice')}
           placeholder="0"
           error={errors.sellingPrice}
         />
@@ -178,13 +132,13 @@ export default function ProductForm({
           label="Selling Price (With GST)"
           type="number"
           value={form.sellingPriceWithGst ?? ''}
-          onChange={setIncl('sellingPrice', 'sellingPriceWithGst')}
+          onChange={set('sellingPriceWithGst')}
           placeholder="0"
         />
 
         <div className="flex items-end sm:col-span-2">
           <div className="w-full rounded-xl border border-border/60 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/40 px-3.5 py-2.5">
-            <p className="text-xs text-muted">Margin (on without-GST prices)</p>
+            <p className="text-xs text-muted">Margin</p>
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               {margin == null ? '—' : `${margin}%`}
             </p>
@@ -193,7 +147,7 @@ export default function ProductForm({
 
         {showOpeningStock && (
           <Input
-            label="Opening Stock"
+            label="Stock"
             type="number"
             value={form.stockQty}
             onChange={set('stockQty')}
@@ -202,24 +156,12 @@ export default function ProductForm({
           />
         )}
         <Input
-          label="Reorder Level"
+          label="Purchased Quantity"
           type="number"
-          value={form.reorderLevel}
-          onChange={set('reorderLevel')}
-          placeholder="10"
-        />
-        <Input
-          label="Reorder Qty"
-          type="number"
-          value={form.reorderQty}
-          onChange={set('reorderQty')}
-          placeholder="50"
-        />
-        <Input
-          label="Storage Location"
-          value={form.location}
-          onChange={set('location')}
-          placeholder="Location"
+          value={form.purchasedQuantity}
+          onChange={set('purchasedQuantity')}
+          placeholder="0"
+          error={errors.purchasedQuantity}
         />
       </div>
 

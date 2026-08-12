@@ -261,17 +261,13 @@ export default function Navbar() {
             tone: 'blue',
           })),
         ...products
-          .filter((p) =>
-            (p.name || '').toLowerCase().includes(q)
-            || (p.sku || '').toLowerCase().includes(q)
-            || (p.barcode || '').toLowerCase().includes(q)
-          )
+          .filter((p) => (p.name || '').toLowerCase().includes(q))
           .slice(0, 3)
           .map((p) => ({
             type: 'Product',
             id: p.id,
             label: p.name,
-            sub: p.sku || 'Inventory',
+            sub: 'Inventory',
             to: `/inventory/${p.id}`,
             tone: 'purple',
           })),

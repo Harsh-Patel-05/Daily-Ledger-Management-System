@@ -1,9 +1,16 @@
 from django.contrib import admin
-from .models import Category, Supplier, Product, StockMovement
+from .models import Category, Brand, Supplier, Product, StockMovement
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'owner', 'color', 'created_at')
+    list_filter = ('owner',)
+    search_fields = ('name',)
+
+
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
     list_display = ('name', 'owner', 'color', 'created_at')
     list_filter = ('owner',)
     search_fields = ('name',)
@@ -18,9 +25,9 @@ class SupplierAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('name', 'sku', 'owner', 'stock_qty', 'selling_price', 'tax_rate', 'status')
-    list_filter = ('status', 'owner', 'category')
-    search_fields = ('name', 'sku', 'barcode', 'hsn')
+    list_display = ('name', 'brand', 'owner', 'stock_qty', 'selling_price', 'tax_rate', 'status')
+    list_filter = ('status', 'owner', 'category', 'brand')
+    search_fields = ('name', 'description', 'brand__name')
 
 
 @admin.register(StockMovement)

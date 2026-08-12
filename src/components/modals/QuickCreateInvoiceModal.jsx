@@ -124,7 +124,7 @@ export default function QuickCreateInvoiceModal() {
           id: 1,
           productId: form.productId || '',
           description: form.description,
-          hsn: getProduct(form.productId)?.hsn || '',
+          hsn: '',
           quantity: Number(form.quantity) || 1,
           rate: Number(form.rate) || 0,
           amount,

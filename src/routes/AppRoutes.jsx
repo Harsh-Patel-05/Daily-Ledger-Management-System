@@ -31,6 +31,7 @@ import AddProduct from '../pages/inventory/AddProduct';
 import EditProduct from '../pages/inventory/EditProduct';
 import ProductDetails from '../pages/inventory/ProductDetails';
 import Categories from '../pages/inventory/Categories';
+import Brands from '../pages/inventory/Brands';
 import Suppliers from '../pages/inventory/Suppliers';
 import StockMovements from '../pages/inventory/StockMovements';
 import LowStock from '../pages/inventory/LowStock';
@@ -93,6 +94,7 @@ export default function AppRoutes() {
         <Route path="/inventory" element={<Navigate to="/inventory/products" replace />} />
         <Route path="/inventory/add" element={<AddProduct />} />
         <Route path="/inventory/categories" element={<Categories />} />
+        <Route path="/inventory/brands" element={<Brands />} />
         <Route path="/inventory/suppliers" element={<Navigate to="/parties/suppliers" replace />} />
         <Route path="/inventory/stock" element={<StockMovements />} />
         <Route path="/inventory/low-stock" element={<LowStock />} />

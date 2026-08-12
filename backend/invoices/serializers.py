@@ -144,7 +144,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
                         invoice=invoice,
                         product=product,
                         description=item.get('description') or item.get('itemDescription') or 'Item',
-                        hsn=item.get('hsn', '') or (product.hsn if product else ''),
+                        hsn=item.get('hsn', ''),
                         quantity=item.get('quantity') or 1,
                         rate=item.get('rate') or 0,
                         sort_order=item.get('sort_order', idx),

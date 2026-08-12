@@ -1,8 +1,9 @@
 """
 Import / re-sync Seema Enterprise inventory Excel into Category + Product (+ Supplier).
 
-Excel PURCHASE/SELLING RATE (+18%) are GST-inclusive.
-Stored purchase_price / selling_price are WITHOUT GST (÷ 1.18).
+Excel PURCHASE/SELLING RATE WITHOUT GST are GST-exclusive.
+Stored as purchase_price / selling_price (Without GST).
+With-GST fields (purchase_price_with_gst / selling_price_with_gst) are set to 0.
 
 Usage:
   python manage.py import_seema_inventory "C:\\path\\to\\file.xlsx" [--owner-id 4] [--dry-run] [--update-prices]
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 from django.contrib.auth import get_user_model
@@ -19,6 +20,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from inventory.models import (
+    Brand,
     Category,
     Product,
     StockMovement,
@@ -74,6 +76,40 @@ CATEGORY_COLORS = {name: color for _, name, color in CATEGORY_RULES}
 CATEGORY_COLORS[DEFAULT_CATEGORY[0]] = DEFAULT_CATEGORY[1]
 GST_RATE = Decimal('18')
 
+# Company / brand names often appear in the product title
+BRAND_RULES = [
+    (r'\bFYBROS\b', 'Fybros'),
+    (r'\bRENOVE\b', 'Renove'),
+    (r'\bARMOR\b', 'Armor'),
+    (r'\bHYBRID\b', 'Hybrid'),
+    (r'\bAURA\b', 'Aura'),
+    (r'\bIKON\b', 'Ikon'),
+    (r'\bGLOW\b', 'Glow'),
+    (r'\bBELLA\b', 'Bella'),
+    (r'\bAERIS\b', 'Fybros'),
+    (r'\bRAZE\b', 'Raze'),
+    (r'\bEME\b', 'Eme'),
+    (r'\bPARROT\b', 'Parrot'),
+    (r'\bAIR-?1\b|CEILING FAN', 'Air-1'),
+    # Seema Enterprise Excel brands
+    (r'\bINDOLEX\b', 'Indolex'),
+    (r'\bFUTURE\b', 'Future'),
+    (r'\bORASLE\b', 'Orasle'),
+    (r'\bRAPID\b', 'Rapid'),
+    (r'\bLEXUR\b', 'Lexur'),
+    (r'\bPAYAL\b', 'Payal'),
+    (r'\bFANCON\b', 'Fancon'),
+    (r'\bJAGUAR\b', 'Jaguar'),
+    (r'\bFEVILEX\b', 'Fevilex'),
+    (r'\bPANCHAM\b', 'Pancham'),
+    (r'\bORIENTAL\b', 'Oriental'),
+    (r'\bRADIUS\b', 'Radius'),
+    (r'\bVINTEX\b', 'Vintex'),
+    (r'\bSKYLAB\b', 'Skylab'),
+    (r'\bEPNIX\b', 'Epnix'),
+    (r'\bJ\s+ULTIMATE\b|\bULTIMATE PEDESTIAL\b', 'J Ultimate'),
+]
+
 
 def _dec(value, default='0'):
     if value is None or value == '':
@@ -84,19 +120,21 @@ def _dec(value, default='0'):
         return Decimal(default)
 
 
-def excl_from_incl(incl, rate=GST_RATE):
-    factor = Decimal('1') + (rate / Decimal('100'))
-    if factor <= 0:
-        return _dec(incl)
-    return (_dec(incl) / factor).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-
-
 def infer_category(name: str) -> str:
     upper = name.upper()
     for pattern, cat_name, _ in CATEGORY_RULES:
         if re.search(pattern, upper):
             return cat_name
     return DEFAULT_CATEGORY[0]
+
+
+def infer_brand(name: str) -> str:
+    """Detect company/brand from product name."""
+    upper = name.upper()
+    for pattern, brand in BRAND_RULES:
+        if re.search(pattern, upper):
+            return brand
+    return ''
 
 
 def clean_supplier(raw) -> str | None:
@@ -125,7 +163,7 @@ def parse_purchase_date(raw):
 
 
 class Command(BaseCommand):
-    help = 'Import Seema Enterprise inventory Excel (GST-inclusive rates → exclusive storage)'
+    help = 'Import Seema Enterprise inventory Excel (rates -> Without GST; With GST = 0)'
 
     def add_arguments(self, parser):
         parser.add_argument('excel_path', type=str)
@@ -161,32 +199,33 @@ class Command(BaseCommand):
 
         rows = []
         for excel_row in ws.iter_rows(min_row=4, max_col=8, values_only=True):
-            purchase_date_raw, _sr, name, purchase_incl, sell_incl, stock, _qty, supplier = excel_row
+            purchase_date_raw, _sr, name, purchase_excl, sell_excl, stock, purchased_qty, supplier = excel_row
             if not name or not str(name).strip():
                 continue
             name = str(name).strip()
-            purchase_incl_d = _dec(purchase_incl)
-            sell_incl_d = _dec(sell_incl)
+            purchase_excl_d = _dec(purchase_excl)
+            sell_excl_d = _dec(sell_excl)
             stock_d = _dec(stock)
+            purchased_qty_d = _dec(purchased_qty)
             if (
-                purchase_incl_d == 0
-                and sell_incl_d == 0
+                purchase_excl_d == 0
+                and sell_excl_d == 0
                 and stock_d == 0
-                and purchase_incl is None
-                and sell_incl is None
+                and purchase_excl is None
+                and sell_excl is None
                 and stock is None
             ):
                 continue
             rows.append({
                 'name': name,
                 'purchase_date': parse_purchase_date(purchase_date_raw),
-                'purchase_incl': purchase_incl_d,
-                'sell_incl': sell_incl_d,
-                'purchase': excl_from_incl(purchase_incl_d),
-                'sell': excl_from_incl(sell_incl_d),
+                'purchase_without_gst': purchase_excl_d,
+                'sell_without_gst': sell_excl_d,
                 'stock': stock_d,
+                'purchased_qty': purchased_qty_d,
                 'supplier': clean_supplier(supplier),
                 'category': infer_category(name),
+                'brand': infer_brand(name),
             })
 
         by_name = {}
@@ -199,17 +238,17 @@ class Command(BaseCommand):
             cat_counts[row['category']] = cat_counts.get(row['category'], 0) + 1
 
         self.stdout.write(f'Owner id={owner.pk}')
-        self.stdout.write(f'Products: {len(rows)} (Excel rates are +18% inclusive)')
+        self.stdout.write(f'Products: {len(rows)} (Excel rates -> Without GST; With GST = 0)')
         for cat, count in sorted(cat_counts.items(), key=lambda x: (-x[1], x[0])):
             self.stdout.write(f'  - {cat}: {count}')
 
         if options['dry_run']:
             sample = rows[0]
             self.stdout.write(
-                f'Sample {sample["name"]}: incl buy={sample["purchase_incl"]} '
-                f'→ excl={sample["purchase"]}, incl sell={sample["sell_incl"]} → excl={sample["sell"]}'
+                f'Sample {sample["name"]}: purchaseWithoutGst={sample["purchase_without_gst"]}, '
+                f'sellWithoutGst={sample["sell_without_gst"]}, withGst=0'
             )
-            self.stdout.write(self.style.WARNING('Dry run — no DB writes'))
+            self.stdout.write(self.style.WARNING('Dry run - no DB writes'))
             return
 
         created_cats = created_sups = created_prods = updated = skipped = stocked = 0
@@ -243,14 +282,32 @@ class Command(BaseCommand):
                 if was_created:
                     created_sups += 1
 
+            brand_map = {}
+            for row in rows:
+                bname = (row.get('brand') or '').strip()
+                if not bname or bname.casefold() in brand_map:
+                    continue
+                brand, _ = Brand.objects.get_or_create(
+                    owner=owner,
+                    name=bname,
+                    defaults={'color': '#6366f1'},
+                )
+                brand_map[bname.casefold()] = brand
+
             for row in rows:
                 existing = Product.objects.filter(owner=owner, name__iexact=row['name']).first()
+                brand_obj = brand_map.get((row.get('brand') or '').strip().casefold())
                 if existing:
                     if options['update_prices']:
-                        existing.purchase_price = row['purchase']
-                        existing.selling_price = row['sell']
+                        existing.purchase_price = row['purchase_without_gst']
+                        existing.selling_price = row['sell_without_gst']
+                        existing.purchase_price_with_gst = Decimal('0')
+                        existing.selling_price_with_gst = Decimal('0')
                         existing.tax_rate = GST_RATE
                         existing.purchase_date = row['purchase_date'] or existing.purchase_date
+                        existing.purchased_quantity = row['purchased_qty']
+                        if brand_obj:
+                            existing.brand = brand_obj
                         existing.category = category_map[row['category']]
                         if row['supplier']:
                             existing.supplier = supplier_map.get(row['supplier'])
@@ -272,15 +329,17 @@ class Command(BaseCommand):
                 product = Product.objects.create(
                     owner=owner,
                     name=row['name'][:200],
+                    brand=brand_obj,
                     category=category_map[row['category']],
                     supplier=supplier_map.get(row['supplier']),
                     purchase_date=row['purchase_date'],
-                    purchase_price=row['purchase'],
-                    selling_price=row['sell'],
+                    purchase_price=row['purchase_without_gst'],
+                    selling_price=row['sell_without_gst'],
+                    purchase_price_with_gst=Decimal('0'),
+                    selling_price_with_gst=Decimal('0'),
                     tax_rate=GST_RATE,
                     stock_qty=Decimal('0'),
-                    reorder_level=Decimal('10'),
-                    reorder_qty=Decimal('50'),
+                    purchased_quantity=row.get('purchased_qty') or Decimal('0'),
                     status=Product.Status.ACTIVE,
                     description='Imported from Seema Enterprise inventory list',
                 )

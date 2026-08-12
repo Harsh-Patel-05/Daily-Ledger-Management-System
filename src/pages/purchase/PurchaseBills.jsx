@@ -166,7 +166,7 @@ export default function PurchaseBills() {
             onChange={set('productId')}
             options={[
               { value: '', label: '— Skip stock —' },
-              ...products.map((p) => ({ value: String(p.id), label: `${p.name}${p.sku ? ` (${p.sku})` : ''}` })),
+              ...products.map((p) => ({ value: String(p.id), label: p.name })),
             ]}
           />
           {form.productId && (

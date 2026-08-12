@@ -1,6 +1,14 @@
 import { cn, formatCurrency } from '../../utils/formatters';
 
-export default function StatCard({ title, value, icon: Icon, color = 'blue', trend, className = '' }) {
+export default function StatCard({
+  title,
+  value,
+  details,
+  icon: Icon,
+  color = 'blue',
+  trend,
+  className = '',
+}) {
   const colors = {
     blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
     green: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -18,12 +26,27 @@ export default function StatCard({ title, value, icon: Icon, color = 'blue', tre
         className
       )}
     >
-      <div className="flex items-start justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-muted font-medium truncate">{title}</p>
-          <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1 tracking-tight">
-            {typeof value === 'number' ? formatCurrency(value) : value}
-          </p>
+          <p className="text-sm text-muted font-medium">{title}</p>
+          {Array.isArray(details) && details.length > 0 ? (
+            <div className="mt-2.5 space-y-2">
+              {details.map((row) => (
+                <div key={row.label} className="flex items-baseline justify-between gap-3">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-muted shrink-0">
+                    {row.label}
+                  </span>
+                  <span className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 text-right tabular-nums">
+                    {typeof row.value === 'number' ? formatCurrency(row.value) : row.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100 mt-1 tracking-tight">
+              {typeof value === 'number' ? formatCurrency(value) : value}
+            </p>
+          )}
           {trend && (
             <p className={cn('text-xs mt-1.5 font-medium', trend.up ? 'text-emerald-600' : 'text-red-500')}>
               {trend.up ? '↑' : '↓'} {trend.value}

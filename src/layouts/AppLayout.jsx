@@ -59,7 +59,7 @@ export default function AppLayout() {
                   <span>
                     {dataError || invError || 'API unavailable — local modules still work.'}
                     {' '}
-                    Start Django on port 8000 for live customers/invoices/stock.
+                    Run <code className="font-semibold">npm start</code> (Django :8000 + Vite :5173).
                   </span>
                   <button type="button" onClick={handleRetry} className="font-medium underline">
                     Retry

@@ -8,7 +8,7 @@ import ProductForm from './ProductForm';
 
 export default function EditProduct() {
   const { id } = useParams();
-  const { categories, suppliers, products, getProduct, updateProduct } = useInventory();
+  const { categories, brands, suppliers, getProduct, updateProduct } = useInventory();
   const product = getProduct(id);
   const [form, setForm] = useState(null);
   const [errors, setErrors] = useState({});
@@ -20,8 +20,7 @@ export default function EditProduct() {
     if (product) {
       setForm({
         name: product.name,
-        sku: product.sku || '',
-        barcode: product.barcode || '',
+        brandId: product.brandId != null && product.brandId !== '' ? String(product.brandId) : '',
         categoryId: product.categoryId != null && product.categoryId !== '' ? String(product.categoryId) : '',
         supplierId: product.supplierId != null && product.supplierId !== '' ? String(product.supplierId) : '',
         description: product.description || '',
@@ -31,11 +30,8 @@ export default function EditProduct() {
         sellingPrice: product.sellingPrice,
         sellingPriceWithGst: product.sellingPriceWithGst ?? product.sellingPrice,
         taxRate: product.taxRate,
-        reorderLevel: product.reorderLevel,
-        reorderQty: product.reorderQty,
-        location: product.location || '',
+        purchasedQuantity: product.purchasedQuantity ?? 0,
         status: product.status || 'active',
-        hsn: product.hsn || '',
       });
     }
   }, [product]);
@@ -54,17 +50,6 @@ export default function EditProduct() {
   const validate = () => {
     const errs = {};
     if (!form.name.trim()) errs.name = 'Product name is required';
-    if (
-      form.sku?.trim() &&
-      products.some(
-        (p) =>
-          String(p.id) !== String(id) &&
-          p.sku &&
-          p.sku.toLowerCase() === form.sku.trim().toLowerCase()
-      )
-    ) {
-      errs.sku = 'SKU already exists';
-    }
     if (Number(form.purchasePrice) < 0) errs.purchasePrice = 'Invalid price';
     if (Number(form.sellingPrice) < 0) errs.sellingPrice = 'Invalid price';
     setErrors(errs);
@@ -109,6 +94,7 @@ export default function EditProduct() {
           setForm={setForm}
           errors={errors}
           categories={categories}
+          brands={brands}
           suppliers={suppliers}
           loading={loading}
           submitLabel="Update Product"

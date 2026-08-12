@@ -1,8 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   FaPlus, FaEye, FaEdit, FaTrash, FaBoxes, FaExclamationTriangle,
   FaTimesCircle, FaRupeeSign, FaTags, FaTruck, FaExchangeAlt, FaSortAmountDown,
+  FaFileImport, FaFileDownload,
 } from 'react-icons/fa';
 import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
@@ -12,17 +13,15 @@ import { formatCurrency, formatNumber, formatDate } from '../../utils/formatters
 import { filterBySearch, sortBy, getStatusColor } from '../../utils/helpers';
 import {
   Breadcrumbs, Card, SearchBox, Filter, Table, Pagination,
-  Button, ConfirmationDialog, FloatingAddButton, EmptyState, ExportButton, StatCard,
+  Button, ConfirmationDialog, FloatingAddButton, EmptyState, ExportButton, StatCard, Modal,
 } from '../../components/ui';
-import { exportToCsv } from '../../utils/exportCsv';
-
-function stockBadge(product) {
+import { exportToCsv, downloadProductImportSample } from '../../utils/exportCsv';
+import { importProducts } from '../../api/inventory';function stockBadge(product) {
   const qty = Number(product.stockQty) || 0;
-  const reorder = Number(product.reorderLevel) || 0;
   if (qty <= 0) {
     return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Out of stock</span>;
   }
-  if (qty <= reorder) {
+  if (qty <= 10) {
     return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Low stock</span>;
   }
   return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">In stock</span>;
@@ -30,7 +29,7 @@ function stockBadge(product) {
 
 export default function ProductList() {
   const {
-    products, categories, stats, getCategory, deleteProduct,
+    products, categories, brands, stats, getCategory, getBrand, deleteProduct,
     error, refreshAll,
   } = useInventory();
   const toast = useToast();
@@ -39,29 +38,37 @@ export default function ProductList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [brandFilter, setBrandFilter] = useState('');
   const [stockFilter, setStockFilter] = useState('');
   const [sortKey, setSortKey] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
   const [deleteId, setDeleteId] = useState(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [updateExisting, setUpdateExisting] = useState(true);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  const fileInputRef = useRef(null);
   const debouncedSearch = useDebounce(search);
 
   const filtered = useMemo(() => {
-    let list = filterBySearch(products, debouncedSearch, ['name', 'sku', 'barcode', 'hsn', 'location']);
+    let list = filterBySearch(products, debouncedSearch, ['name', 'brand']);
     if (statusFilter) list = list.filter((p) => p.status === statusFilter);
     if (categoryFilter) list = list.filter((p) => String(p.categoryId) === String(categoryFilter));
+    if (brandFilter) list = list.filter((p) => String(p.brandId) === String(brandFilter));
     if (stockFilter === 'low') {
-      list = list.filter((p) => Number(p.stockQty) > 0 && Number(p.stockQty) <= Number(p.reorderLevel));
+      list = list.filter((p) => Number(p.stockQty) > 0 && Number(p.stockQty) <= 10);
     } else if (stockFilter === 'out') {
       list = list.filter((p) => Number(p.stockQty) <= 0);
     } else if (stockFilter === 'ok') {
-      list = list.filter((p) => Number(p.stockQty) > Number(p.reorderLevel));
+      list = list.filter((p) => Number(p.stockQty) > 10);
     }
     return sortBy(list, sortKey, sortDir);
-  }, [products, debouncedSearch, statusFilter, categoryFilter, stockFilter, sortKey, sortDir]);
+  }, [products, debouncedSearch, statusFilter, categoryFilter, brandFilter, stockFilter, sortKey, sortDir]);
 
   const { data, page, totalPages, total, perPage, goToPage, resetPage } = usePagination(filtered, 8);
 
-  useEffect(() => { resetPage(); }, [debouncedSearch, statusFilter, categoryFilter, stockFilter]);
+  useEffect(() => { resetPage(); }, [debouncedSearch, statusFilter, categoryFilter, brandFilter, stockFilter]);
 
   const handleDelete = async () => {
     try {
@@ -73,6 +80,34 @@ export default function ProductList() {
     }
   };
 
+  const openImport = () => {
+    setImportFile(null);
+    setImportResult(null);
+    setUpdateExisting(true);
+    setImportOpen(true);
+  };
+
+  const handleImport = async () => {
+    if (!importFile) {
+      toast.error('Choose a CSV or Excel file');
+      return;
+    }
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const result = await importProducts(importFile, { updateExisting });
+      setImportResult(result);
+      await refreshAll();
+      toast.success(
+        `Import done: ${result.created || 0} new, ${result.updated || 0} updated`
+      );
+    } catch (err) {
+      toast.error(err.message || 'Import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const columns = [
     {
       key: 'name',
@@ -80,7 +115,11 @@ export default function ProductList() {
       render: (_, row) => (
         <div>
           <p className="font-medium text-slate-800 dark:text-slate-100">{row.name}</p>
-          <p className="text-xs text-muted">{row.sku || 'No SKU'} · {getCategory(row.categoryId)?.name || 'Uncategorized'}</p>
+          <p className="text-xs text-muted">
+            {[getBrand(row.brandId)?.name || row.brand, getCategory(row.categoryId)?.name || 'Uncategorized']
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
         </div>
       ),
     },
@@ -120,9 +159,9 @@ export default function ProductList() {
       ),
     },
     {
-      key: 'location',
-      label: 'Location',
-      render: (v) => v || '—',
+      key: 'purchasedQuantity',
+      label: 'Purchased Qty',
+      render: (v) => formatNumber(v || 0),
     },
     {
       key: 'status',
@@ -175,6 +214,9 @@ export default function ProductList() {
           <Link to="/inventory/categories">
             <Button variant="outline"><FaTags size={12} /> Categories</Button>
           </Link>
+          <Link to="/inventory/brands">
+            <Button variant="outline"><FaTags size={12} /> Brands</Button>
+          </Link>
           <Link to="/inventory/stock">
             <Button variant="outline"><FaExchangeAlt size={12} /> Stock</Button>
           </Link>
@@ -189,17 +231,16 @@ export default function ProductList() {
               exportToCsv(
                 filtered.map((p) => ({
                   Name: p.name,
-                  SKU: p.sku,
+                  Brand: getBrand(p.brandId)?.name || p.brand || '',
                   Category: getCategory(p.categoryId)?.name || '',
                   Stock: p.stockQty,
+                  PurchasedQuantity: p.purchasedQuantity,
                   PurchaseDate: p.purchaseDate || '',
                   PurchaseWithoutGst: p.purchasePriceWithoutGst ?? p.purchasePrice,
                   PurchaseWithGst: p.purchasePriceWithGst,
                   SellingWithoutGst: p.sellingPriceWithoutGst ?? p.sellingPrice,
                   SellingWithGst: p.sellingPriceWithGst,
                   GstRate: p.taxRate,
-                  ReorderLevel: p.reorderLevel,
-                  Location: p.location || '',
                   Status: p.status,
                 })),
                 'inventory-products.csv'
@@ -207,6 +248,9 @@ export default function ProductList() {
               toast.success('Products exported');
             }}
           />
+          <Button variant="outline" onClick={openImport}>
+            <FaFileImport size={12} /> Import
+          </Button>
           <Link to="/inventory/add">
             <Button><FaPlus size={12} /> Add Product</Button>
           </Link>
@@ -215,7 +259,7 @@ export default function ProductList() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Total Products" value={String(stats.totalProducts)} icon={FaBoxes} color="blue" />
-        <StatCard title="Stock Value" value={stats.stockValue} icon={FaRupeeSign} color="green" />
+        <StatCard title="Stock Value" value={stats.stockValueWithGst || stats.stockValue || 0} icon={FaRupeeSign} color="green" />
         <StatCard title="Low Stock" value={String(stats.lowStock)} icon={FaExclamationTriangle} color="amber" />
         <StatCard title="Out of Stock" value={String(stats.outOfStock)} icon={FaTimesCircle} color="red" />
       </div>
@@ -225,10 +269,16 @@ export default function ProductList() {
           <SearchBox
             value={search}
             onChange={setSearch}
-            placeholder="Search by name, SKU, barcode, HSN..."
+            placeholder="Search by name or company..."
             className="w-full"
           />
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
+            <Filter
+              value={brandFilter}
+              onChange={setBrandFilter}
+              label="All Companies"
+              options={brands.map((b) => ({ value: b.id, label: b.name }))}
+            />
             <Filter
               value={categoryFilter}
               onChange={setCategoryFilter}
@@ -306,6 +356,93 @@ export default function ProductList() {
         message="Are you sure you want to delete this product and its stock history?"
         confirmText="Delete"
       />
+
+      <Modal
+        open={importOpen}
+        onClose={() => !importing && setImportOpen(false)}
+        title="Import Products"
+        size="md"
+        footer={(
+          <>
+            <Button variant="outline" onClick={() => setImportOpen(false)} disabled={importing}>
+              Close
+            </Button>
+            <Button onClick={handleImport} loading={importing} disabled={!importFile}>
+              <FaFileImport size={12} /> Upload & Import
+            </Button>
+          </>
+        )}
+      >
+        <div className="space-y-4 text-sm">
+          <p className="text-muted">
+            Upload the same CSV from Export, or an Excel (.xlsx) with columns like
+            Name / Product Name, Brand, Category, prices, Stock.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => {
+              downloadProductImportSample();
+              toast.success('Sample file downloaded');
+            }}
+          >
+            <FaFileDownload size={12} /> Download sample CSV
+          </Button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xlsm,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+            className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-primary/10 file:px-3 file:py-2 file:text-primary file:font-medium"
+            onChange={(e) => {
+              setImportFile(e.target.files?.[0] || null);
+              setImportResult(null);
+            }}
+          />
+          {importFile && (
+            <p className="text-slate-700 dark:text-slate-200">
+              Selected: <span className="font-medium">{importFile.name}</span>
+            </p>
+          )}
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={updateExisting}
+              onChange={(e) => setUpdateExisting(e.target.checked)}
+            />
+            <span>
+              Update existing products (same name). Uncheck to only create new ones.
+            </span>
+          </label>
+          {importResult && (
+            <div className="rounded-xl border border-border bg-slate-50 dark:bg-slate-800/50 p-3 space-y-1">
+              <p className="font-medium text-slate-800 dark:text-slate-100">Result</p>
+              <p>File rows: {importResult.sourceRows ?? importResult.total ?? 0}</p>
+              <p>Unique products: {importResult.uniqueProducts ?? importResult.total ?? 0}</p>
+              {(importResult.duplicatesCollapsed ?? 0) > 0 && (
+                <p className="text-amber-700 dark:text-amber-300">
+                  Duplicate names merged: {importResult.duplicatesCollapsed}
+                  {' '}(same product name counted once)
+                </p>
+              )}
+              <p>Created: {importResult.created ?? 0}</p>
+              <p>Updated: {importResult.updated ?? 0}</p>
+              <p>Skipped: {importResult.skipped ?? 0}</p>
+              {importResult.errors?.length > 0 && (
+                <div className="pt-2 text-amber-700 dark:text-amber-300">
+                  <p className="font-medium">Row errors</p>
+                  <ul className="list-disc pl-5">
+                    {importResult.errors.map((err) => (
+                      <li key={err}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

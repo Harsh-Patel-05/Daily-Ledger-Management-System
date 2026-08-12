@@ -138,7 +138,10 @@ export function OutstandingReports() {
 
 export function InventoryReports() {
   const { products, stats } = useInventory();
-  const value = products.reduce((s, p) => s + (Number(p.stockQty) || 0) * (Number(p.purchasePrice) || 0), 0);
+  const value = stats.stockValueWithGst ?? products.reduce(
+    (s, p) => s + (Number(p.stockQty) || 0) * (Number(p.purchasePriceWithGst) || Number(p.purchasePrice) || 0),
+    0
+  );
   return (
     <ReportPage
       title="Inventory Reports"
@@ -154,7 +157,12 @@ export function InventoryReports() {
         columns={[
           { key: 'name', label: 'Product' },
           { key: 'stockQty', label: 'Qty' },
-          { key: 'purchasePrice', label: 'Cost', render: (v) => formatCurrency(v) },
+          {
+            key: 'purchasePriceWithGst',
+            label: 'Cost',
+            render: (_, row) =>
+              formatCurrency(Number(row.purchasePriceWithGst) || Number(row.purchasePrice) || 0),
+          },
         ]}
         data={products.slice(0, 20)}
       />

@@ -28,7 +28,7 @@ export default function StockAdjustment() {
 
   const product = form.productId ? getProduct(form.productId) : null;
   const options = useMemo(
-    () => products.map((p) => ({ value: String(p.id), label: `${p.name}${p.sku ? ` (${p.sku})` : ''}` })),
+    () => products.map((p) => ({ value: String(p.id), label: p.name })),
     [products]
   );
 

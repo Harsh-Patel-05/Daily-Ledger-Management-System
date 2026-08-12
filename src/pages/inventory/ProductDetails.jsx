@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
-  FaArrowLeft, FaEdit, FaTrash, FaExchangeAlt, FaBoxOpen, FaMapMarkerAlt,
-  FaTag, FaTruck, FaBarcode,
+  FaArrowLeft, FaEdit, FaTrash, FaExchangeAlt, FaBoxOpen,
+  FaTag, FaTruck,
 } from 'react-icons/fa';
 import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
@@ -17,7 +17,7 @@ import {
 export default function ProductDetails() {
   const { id } = useParams();
   const {
-    getProduct, getCategory, getSupplier, getProductMovements, deleteProduct,
+    getProduct, getCategory, getBrand, getSupplier, getProductMovements, deleteProduct,
   } = useInventory();
   const toast = useToast();
   const navigate = useNavigate();
@@ -26,6 +26,7 @@ export default function ProductDetails() {
   const product = getProduct(id);
   const movements = getProductMovements(id).slice(0, 12);
   const category = product ? getCategory(product.categoryId) : null;
+  const brand = product ? getBrand(product.brandId) : null;
   const supplier = product ? getSupplier(product.supplierId) : null;
 
   if (!product) {
@@ -37,10 +38,14 @@ export default function ProductDetails() {
     );
   }
 
-  const stockValue = Number(product.stockQty || 0) * Number(product.purchasePrice || 0);
-  const margin = Number(product.purchasePrice)
-    ? Math.round(((Number(product.sellingPrice) - Number(product.purchasePrice)) / Number(product.purchasePrice)) * 100)
-    : 0;
+  const buyWithout = Number(product.purchasePrice) || 0;
+  const buyWith = Number(product.purchasePriceWithGst) || 0;
+  const sellWithout = Number(product.sellingPrice) || 0;
+  const sellWith = Number(product.sellingPriceWithGst) || 0;
+  const stockValue = Number(product.stockQty || 0) * (buyWith || buyWithout);
+  const marginBuy = buyWithout || buyWith;
+  const marginSell = sellWithout || sellWith;
+  const margin = marginBuy ? Math.round(((marginSell - marginBuy) / marginBuy) * 100) : 0;
 
   const handleDelete = async () => {
     try {
@@ -66,7 +71,7 @@ export default function ProductDetails() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-slate-800 dark:text-white">{product.name}</h1>
-            <p className="text-sm text-muted">{product.sku || 'No SKU'}</p>
+            <p className="text-sm text-muted">{category?.name || 'Uncategorized'}</p>
           </div>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -85,7 +90,7 @@ export default function ProductDetails() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard title="Current Stock" value={formatNumber(product.stockQty)} icon={FaBoxOpen} color="blue" />
         <StatCard title="Stock Value" value={stockValue} icon={FaTag} color="green" />
-        <StatCard title="Selling (ex-GST)" value={product.sellingPrice} icon={FaTag} color="purple" />
+        <StatCard title="Selling (With GST)" value={product.sellingPriceWithGst || product.sellingPrice || 0} icon={FaTag} color="purple" />
         <StatCard title="Margin" value={`${margin}%`} icon={FaTag} color="amber" />
       </div>
 
@@ -102,13 +107,11 @@ export default function ProductDetails() {
           </div>
 
           <div className="space-y-3 text-sm">
-            <InfoRow icon={FaBarcode} label="Barcode" value={product.barcode || '—'} />
+            <InfoRow icon={FaTag} label="Company / Brand" value={brand?.name || product.brand || '—'} />
             <InfoRow icon={FaTag} label="Category" value={category?.name || 'Uncategorized'} />
             <InfoRow icon={FaTruck} label="Supplier" value={supplier?.name || '—'} />
             <InfoRow icon={FaTag} label="Purchase Date" value={product.purchaseDate ? formatDate(product.purchaseDate) : '—'} />
-            <InfoRow icon={FaMapMarkerAlt} label="Location" value={product.location || '—'} />
-            <InfoRow icon={FaTag} label="HSN" value={product.hsn || '—'} />
-            <InfoRow icon={FaBoxOpen} label="Reorder Level" value={formatNumber(product.reorderLevel)} />
+            <InfoRow icon={FaBoxOpen} label="Purchased Quantity" value={formatNumber(product.purchasedQuantity || 0)} />
           </div>
 
           {product.description && (
@@ -128,7 +131,6 @@ export default function ProductDetails() {
               <PriceTile label="GST %" value={`${product.taxRate}%`} />
               <PriceTile label="Selling (Without GST)" value={formatCurrency(product.sellingPriceWithoutGst ?? product.sellingPrice)} />
               <PriceTile label="Selling (With GST)" value={formatCurrency(product.sellingPriceWithGst)} />
-              <PriceTile label="Reorder Qty" value={formatNumber(product.reorderQty)} />
             </div>
           </Card>
 

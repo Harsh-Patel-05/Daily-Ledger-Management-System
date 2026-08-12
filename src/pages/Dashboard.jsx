@@ -98,7 +98,7 @@ export default function Dashboard() {
         <StatCard title="Transactions" value={String(stats.totalTransactions)} icon={FaExchangeAlt} color="slate" />
         <StatCard title="Unpaid Invoices" value={String(stats.unpaidInvoices)} icon={FaCreditCard} color="purple" />
         <StatCard title="Overdue Customers" value={String(stats.overdueCustomers)} icon={FaClock} color="amber" />
-        <StatCard title="Stock Value" value={invStats.stockValue} icon={FaBoxes} color="green" />
+        <StatCard title="Stock Value" value={invStats.stockValueWithGst || invStats.stockValue || 0} icon={FaBoxes} color="green" />
         <StatCard title="Low / Out of Stock" value={String(invStats.lowStock + invStats.outOfStock)} icon={FaBoxes} color="red" />
       </motion.div>
 
@@ -244,7 +244,7 @@ export default function Dashboard() {
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate">{p.name}</p>
-                    <p className="text-xs text-muted">Reorder at {formatNumber(p.reorderLevel)}</p>
+                    <p className="text-xs text-muted">Stock {formatNumber(p.stockQty)}</p>
                   </div>
                   <Badge variant={Number(p.stockQty) <= 0 ? 'danger' : 'warning'}>
                     {Number(p.stockQty) <= 0 ? 'Out' : `${formatNumber(p.stockQty)} left`}

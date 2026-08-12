@@ -8,7 +8,7 @@ import { Breadcrumbs, Card } from '../../components/ui';
 import ProductForm from './ProductForm';
 
 export default function AddProduct() {
-  const { categories, suppliers, products, addProduct } = useInventory();
+  const { categories, brands, suppliers, addProduct } = useInventory();
   const [form, setForm] = useState({ ...emptyProduct });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -18,12 +18,6 @@ export default function AddProduct() {
   const validate = () => {
     const errs = {};
     if (!form.name.trim()) errs.name = 'Product name is required';
-    if (
-      form.sku?.trim() &&
-      products.some((p) => p.sku && p.sku.toLowerCase() === form.sku.trim().toLowerCase())
-    ) {
-      errs.sku = 'SKU already exists';
-    }
     if (form.purchasePrice !== '' && Number(form.purchasePrice) < 0) errs.purchasePrice = 'Invalid price';
     if (form.sellingPrice !== '' && Number(form.sellingPrice) < 0) errs.sellingPrice = 'Invalid price';
     if (form.stockQty !== '' && Number(form.stockQty) < 0) errs.stockQty = 'Invalid stock';
@@ -65,6 +59,7 @@ export default function AddProduct() {
           setForm={setForm}
           errors={errors}
           categories={categories}
+          brands={brands}
           suppliers={suppliers}
           loading={loading}
           submitLabel="Save Product"

@@ -17,10 +17,9 @@ export default function LowStock() {
   const list = useMemo(() => {
     const low = products.filter((p) => {
       const qty = Number(p.stockQty) || 0;
-      const reorder = Number(p.reorderLevel) || 0;
-      return qty <= reorder;
+      return qty > 0 && qty <= 10;
     });
-    return filterBySearch(low, debouncedSearch, ['name', 'sku', 'barcode']);
+    return filterBySearch(low, debouncedSearch, ['name', 'brand']);
   }, [products, debouncedSearch]);
 
   const { data, page, totalPages, total, perPage, goToPage, resetPage } = usePagination(list, 10);
@@ -33,7 +32,7 @@ export default function LowStock() {
       render: (_, row) => (
         <div>
           <Link to={`/inventory/${row.id}`} className="font-medium text-primary hover:underline">{row.name}</Link>
-          <p className="text-xs text-muted">{row.sku || 'No SKU'} · {getCategory(row.categoryId)?.name || '—'}</p>
+          <p className="text-xs text-muted">{getCategory(row.categoryId)?.name || '—'}</p>
         </div>
       ),
     },
@@ -47,9 +46,9 @@ export default function LowStock() {
       ),
     },
     {
-      key: 'reorderLevel',
-      label: 'Reorder Level',
-      render: (v) => formatNumber(v),
+      key: 'purchasedQuantity',
+      label: 'Purchased Qty',
+      render: (v) => formatNumber(v || 0),
     },
     {
       key: 'actions',
@@ -66,7 +65,7 @@ export default function LowStock() {
     <div className="space-y-4">
       <PageHeader
         title="Low Stock"
-        subtitle="Products at or below reorder level"
+        subtitle="Products with stock 10 or below"
         breadcrumbs={[{ label: 'Inventory', to: '/inventory/products' }, { label: 'Low Stock' }]}
       />
       <div className="grid sm:grid-cols-2 gap-4">
@@ -76,7 +75,7 @@ export default function LowStock() {
       <Card>
         <div className="mb-4"><SearchBox value={search} onChange={setSearch} placeholder="Search products..." /></div>
         {list.length === 0 ? (
-          <EmptyState title="Stock looks healthy" description="No products are below reorder level." />
+          <EmptyState title="Stock looks healthy" description="No products with stock 10 or below." />
         ) : (
           <>
             <Table columns={columns} data={data} />

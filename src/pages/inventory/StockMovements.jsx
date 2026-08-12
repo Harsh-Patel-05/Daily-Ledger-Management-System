@@ -52,13 +52,12 @@ export default function StockMovements() {
       return {
         ...m,
         productName: product?.name || 'Deleted product',
-        sku: product?.sku || '',
       };
     });
   }, [movements, getProduct]);
 
   const filtered = useMemo(() => {
-    let list = filterBySearch(enriched, debouncedSearch, ['productName', 'sku', 'reason', 'reference']);
+    let list = filterBySearch(enriched, debouncedSearch, ['productName', 'reason', 'reference']);
     if (typeFilter) list = list.filter((m) => m.type === typeFilter);
     if (preselect) list = list.filter((m) => String(m.productId) === String(preselect));
     return list;
@@ -131,7 +130,6 @@ export default function StockMovements() {
       render: (_, row) => (
         <div>
           <p className="font-medium text-slate-800 dark:text-slate-100">{row.productName}</p>
-          <p className="text-xs text-muted">{row.sku || '—'}</p>
         </div>
       ),
     },
@@ -215,7 +213,7 @@ export default function StockMovements() {
               >
                 <div>
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100">{p.name}</p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300">Below reorder ({p.reorderLevel})</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">Low stock (≤ 10)</p>
                 </div>
                 <span className="text-sm font-bold text-amber-700 dark:text-amber-300">{p.stockQty}</span>
               </Link>

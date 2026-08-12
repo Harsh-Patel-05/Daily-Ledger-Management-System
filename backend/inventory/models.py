@@ -27,6 +27,28 @@ class Category(models.Model):
         return self.name
 
 
+class Brand(models.Model):
+    """Company / manufacturer master for products."""
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='inventory_brands',
+    )
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    color = models.CharField(max_length=20, default='#6366f1')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+        unique_together = [('owner', 'name')]
+        indexes = [models.Index(fields=['owner', 'name'])]
+
+    def __str__(self):
+        return self.name
+
+
 class Supplier(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -63,8 +85,13 @@ class Product(models.Model):
         related_name='products',
     )
     name = models.CharField(max_length=200)
-    sku = models.CharField(max_length=80, blank=True)
-    barcode = models.CharField(max_length=80, blank=True)
+    brand = models.ForeignKey(
+        'Brand',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products',
+    )
     category = models.ForeignKey(
         Category,
         on_delete=models.SET_NULL,
@@ -81,16 +108,14 @@ class Product(models.Model):
     )
     description = models.TextField(blank=True)
     purchase_date = models.DateField(null=True, blank=True)
-    # purchase_price / selling_price are WITHOUT GST (tax exclusive)
     purchase_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     selling_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    purchase_price_with_gst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    selling_price_with_gst = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
     stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    reorder_level = models.DecimalField(max_digits=12, decimal_places=2, default=10)
-    reorder_qty = models.DecimalField(max_digits=12, decimal_places=2, default=50)
-    location = models.CharField(max_length=120, blank=True)
+    purchased_quantity = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.ACTIVE)
-    hsn = models.CharField(max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -98,35 +123,18 @@ class Product(models.Model):
         ordering = ['name']
         indexes = [
             models.Index(fields=['owner', 'name']),
-            models.Index(fields=['owner', 'sku']),
             models.Index(fields=['owner', 'status']),
             models.Index(fields=['owner', 'purchase_date']),
-        ]
-        constraints = [
-            models.UniqueConstraint(
-                fields=['owner', 'sku'],
-                condition=~models.Q(sku=''),
-                name='uniq_owner_sku_nonempty',
-            ),
         ]
 
     def __str__(self):
         return self.name
 
     @property
-    def purchase_price_with_gst(self):
-        rate = Decimal(self.tax_rate or 0)
-        return (Decimal(self.purchase_price or 0) * (1 + rate / Decimal('100'))).quantize(Decimal('0.01'))
-
-    @property
-    def selling_price_with_gst(self):
-        rate = Decimal(self.tax_rate or 0)
-        return (Decimal(self.selling_price or 0) * (1 + rate / Decimal('100'))).quantize(Decimal('0.01'))
-
-    @property
     def is_low_stock(self):
+        """Soft low-stock signal when current stock is positive but low (<= 10)."""
         qty = Decimal(self.stock_qty or 0)
-        return qty > 0 and qty <= Decimal(self.reorder_level or 0)
+        return qty > 0 and qty <= Decimal('10')
 
     @property
     def is_out_of_stock(self):

@@ -5,12 +5,12 @@ export function applyProductToLine(item, product) {
     return { ...item, productId: '' };
   }
   const qty = Number(item.quantity) || 1;
-  const rate = Number(product.sellingPrice) || 0;
+  const rate = Number(product.sellingPrice) || Number(product.sellingPriceWithGst) || 0;
   return {
     ...item,
     productId: product.id,
     description: product.name,
-    hsn: product.hsn || item.hsn || '',
+    hsn: item.hsn || '',
     rate,
     amount: qty * rate,
   };

@@ -13,6 +13,14 @@ export function toCategoryPayload(data) {
   };
 }
 
+export function toBrandPayload(data) {
+  return {
+    name: data.name,
+    description: data.description || '',
+    color: data.color || '#6366f1',
+  };
+}
+
 export function toSupplierPayload(data) {
   return {
     name: data.name,
@@ -28,20 +36,18 @@ export function toSupplierPayload(data) {
 export function toProductPayload(data, { includeStock = false } = {}) {
   const payload = {
     name: data.name,
-    sku: data.sku || '',
-    barcode: data.barcode || '',
+    brandId: data.brandId ? stripId(data.brandId) : null,
     categoryId: data.categoryId ? stripId(data.categoryId) : null,
     supplierId: data.supplierId ? stripId(data.supplierId) : null,
     description: data.description || '',
     purchaseDate: data.purchaseDate || null,
     purchasePrice: Number(data.purchasePrice) || 0,
+    purchasePriceWithGst: Number(data.purchasePriceWithGst) || 0,
     sellingPrice: Number(data.sellingPrice) || 0,
+    sellingPriceWithGst: Number(data.sellingPriceWithGst) || 0,
     taxRate: Number(data.taxRate) || 0,
-    reorderLevel: Number(data.reorderLevel) || 0,
-    reorderQty: Number(data.reorderQty) || 0,
-    location: data.location || '',
+    purchasedQuantity: Number(data.purchasedQuantity) || 0,
     status: data.status || 'active',
-    hsn: data.hsn || '',
   };
   if (includeStock) payload.stockQty = Number(data.stockQty) || 0;
   return payload;
@@ -61,6 +67,22 @@ export function updateCategory(id, data) {
 
 export function deleteCategory(id) {
   return api.delete(`/inventory/categories/${stripId(id)}/`);
+}
+
+export function listBrands() {
+  return fetchAll('/inventory/brands/');
+}
+
+export function createBrand(data) {
+  return api.post('/inventory/brands/', toBrandPayload(data));
+}
+
+export function updateBrand(id, data) {
+  return api.patch(`/inventory/brands/${stripId(id)}/`, toBrandPayload(data));
+}
+
+export function deleteBrand(id) {
+  return api.delete(`/inventory/brands/${stripId(id)}/`);
 }
 
 export function listSuppliers() {
@@ -117,5 +139,13 @@ export function createMovement(data) {
 
 export function getInventoryStats() {
   return api.get('/inventory/stats/');
+}
+
+/** Bulk import products from CSV or Excel (.xlsx). */
+export function importProducts(file, { updateExisting = true } = {}) {
+  const fd = new FormData();
+  fd.append('file', file);
+  fd.append('updateExisting', updateExisting ? 'true' : 'false');
+  return api.upload('/inventory/products/import/', fd, { method: 'POST' });
 }
 

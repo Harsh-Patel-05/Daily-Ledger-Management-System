@@ -21,6 +21,7 @@ const navCommands = [
   { id: 'out', label: 'Outstanding', icon: FaClock, to: '/parties/outstanding', group: 'Navigate' },
   { id: 'invt', label: 'Products', icon: FaBoxes, to: '/inventory/products', group: 'Navigate' },
   { id: 'invt-cat', label: 'Categories', icon: FaTags, to: '/inventory/categories', group: 'Navigate' },
+  { id: 'invt-brand', label: 'Brands', icon: FaTags, to: '/inventory/brands', group: 'Navigate' },
   { id: 'invt-stk', label: 'Stock', icon: FaExchangeAlt, to: '/inventory/stock', group: 'Navigate' },
   { id: 'inv', label: 'Sales Invoices', icon: FaFileInvoiceDollar, to: '/sales/invoices', group: 'Navigate' },
   { id: 'pur', label: 'Purchase Bills', icon: FaFileInvoiceDollar, to: '/purchase/bills', group: 'Navigate' },
@@ -182,7 +183,7 @@ export default function CommandPalette() {
       ...products.filter((p) => p.status === 'active').slice(0, 8).map((p) => ({
         id: `p-${p.id}`,
         label: p.name,
-        sub: `${p.sku || 'No SKU'} · stock ${p.stockQty}`,
+        sub: `stock ${p.stockQty}`,
         icon: FaBoxes,
         to: `/inventory/${p.id}`,
         group: 'Products',

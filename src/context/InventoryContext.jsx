@@ -16,6 +16,7 @@ export function InventoryProvider({ children }) {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
   const [categories, setCategories] = useState([]);
+  const [brands, setBrands] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [movements, setMovements] = useState([]);
@@ -26,6 +27,7 @@ export function InventoryProvider({ children }) {
 
   const clearLocal = useCallback(() => {
     setCategories([]);
+    setBrands([]);
     setSuppliers([]);
     setProducts([]);
     setMovements([]);
@@ -48,14 +50,16 @@ export function InventoryProvider({ children }) {
     setLoading(true);
     setError(null);
     try {
-      const [cats, sups, prods, movs, stats] = await Promise.all([
+      const [cats, brandList, sups, prods, movs, stats] = await Promise.all([
         inventoryApi.listCategories(),
+        inventoryApi.listBrands(),
         inventoryApi.listSuppliers(),
         inventoryApi.listProducts(),
         inventoryApi.listMovements(),
         inventoryApi.getInventoryStats().catch(() => null),
       ]);
       setCategories(cats);
+      setBrands(brandList);
       setSuppliers(sups);
       setProducts(prods);
       setMovements(movs);
@@ -92,6 +96,11 @@ export function InventoryProvider({ children }) {
   const getCategory = useCallback(
     (id) => categories.find((c) => sameId(c.id, id)),
     [categories]
+  );
+
+  const getBrand = useCallback(
+    (id) => brands.find((b) => sameId(b.id, id)),
+    [brands]
   );
 
   const getSupplier = useCallback(
@@ -132,6 +141,25 @@ export function InventoryProvider({ children }) {
   const deleteCategory = useCallback(async (id) => {
     await inventoryApi.deleteCategory(id);
     setCategories((prev) => prev.filter((c) => !sameId(c.id, id)));
+    refreshStats();
+  }, [refreshStats]);
+
+  const addBrand = useCallback(async (data) => {
+    const brand = await inventoryApi.createBrand(data);
+    setBrands((prev) => [...prev, brand]);
+    refreshStats();
+    return brand;
+  }, [refreshStats]);
+
+  const updateBrand = useCallback(async (id, data) => {
+    const brand = await inventoryApi.updateBrand(id, data);
+    setBrands((prev) => prev.map((b) => (sameId(b.id, id) ? brand : b)));
+    return brand;
+  }, []);
+
+  const deleteBrand = useCallback(async (id) => {
+    await inventoryApi.deleteBrand(id);
+    setBrands((prev) => prev.filter((b) => !sameId(b.id, id)));
     refreshStats();
   }, [refreshStats]);
 
@@ -208,8 +236,8 @@ export function InventoryProvider({ children }) {
   );
 
   const getInventorySnapshot = useCallback(
-    () => ({ categories, suppliers, products, movements }),
-    [categories, suppliers, products, movements]
+    () => ({ categories, brands, suppliers, products, movements }),
+    [categories, brands, suppliers, products, movements]
   );
 
   const stats = useMemo(() => {
@@ -218,32 +246,49 @@ export function InventoryProvider({ children }) {
       (p) =>
         p.status !== 'discontinued' &&
         Number(p.stockQty) > 0 &&
-        Number(p.stockQty) <= Number(p.reorderLevel)
+        Number(p.stockQty) <= 10
     );
     const outOfStockLocal = products.filter(
       (p) => p.status !== 'discontinued' && Number(p.stockQty) <= 0
     );
-    const stockValueLocal = products.reduce(
-      (sum, p) => sum + Number(p.stockQty || 0) * Number(p.purchasePrice || 0),
+    const stockValueWithoutGstLocal = products.reduce(
+      (sum, p) => sum + Number(p.stockQty || 0) * (Number(p.purchasePrice) || 0),
       0
     );
-    const retailValueLocal = products.reduce(
-      (sum, p) => sum + Number(p.stockQty || 0) * Number(p.sellingPrice || 0),
+    const stockValueWithGstLocal = products.reduce(
+      (sum, p) => sum + Number(p.stockQty || 0) * (Number(p.purchasePriceWithGst) || 0),
+      0
+    );
+    const retailValueWithoutGstLocal = products.reduce(
+      (sum, p) => sum + Number(p.stockQty || 0) * (Number(p.sellingPrice) || 0),
+      0
+    );
+    const retailValueWithGstLocal = products.reduce(
+      (sum, p) => sum + Number(p.stockQty || 0) * (Number(p.sellingPriceWithGst) || 0),
       0
     );
 
     if (statsExtra) {
       const lowItems = statsExtra.lowStockItems?.length ? statsExtra.lowStockItems : lowStockLocal;
       const outItems = statsExtra.outOfStockItems?.length ? statsExtra.outOfStockItems : outOfStockLocal;
+      const stockWithout = statsExtra.stockValueWithoutGst ?? stockValueWithoutGstLocal;
+      const stockWith = statsExtra.stockValueWithGst ?? stockValueWithGstLocal;
+      const retailWithout = statsExtra.retailValueWithoutGst ?? retailValueWithoutGstLocal;
+      const retailWith = statsExtra.retailValueWithGst ?? retailValueWithGstLocal;
       return {
         totalProducts: statsExtra.totalProducts ?? products.length,
         activeProducts: statsExtra.activeProducts ?? active.length,
         categories: statsExtra.categories ?? categories.length,
+        brands: statsExtra.brands ?? brands.length,
         suppliers: statsExtra.suppliers ?? suppliers.length,
         lowStock: statsExtra.lowStock ?? lowItems.length,
         outOfStock: statsExtra.outOfStock ?? outItems.length,
-        stockValue: statsExtra.stockValue ?? stockValueLocal,
-        retailValue: statsExtra.retailValue ?? retailValueLocal,
+        stockValueWithoutGst: stockWithout,
+        stockValueWithGst: stockWith,
+        stockValue: stockWith || stockWithout,
+        retailValueWithoutGst: retailWithout,
+        retailValueWithGst: retailWith,
+        retailValue: retailWith || retailWithout,
         recentMovements: statsExtra.recentMovements || movements.slice(0, 8),
         lowStockItems: lowItems,
         outOfStockItems: outItems,
@@ -254,33 +299,43 @@ export function InventoryProvider({ children }) {
       totalProducts: products.length,
       activeProducts: active.length,
       categories: categories.length,
+      brands: brands.length,
       suppliers: suppliers.length,
       lowStock: lowStockLocal.length,
       outOfStock: outOfStockLocal.length,
-      stockValue: stockValueLocal,
-      retailValue: retailValueLocal,
+      stockValueWithoutGst: stockValueWithoutGstLocal,
+      stockValueWithGst: stockValueWithGstLocal,
+      stockValue: stockValueWithGstLocal || stockValueWithoutGstLocal,
+      retailValueWithoutGst: retailValueWithoutGstLocal,
+      retailValueWithGst: retailValueWithGstLocal,
+      retailValue: retailValueWithGstLocal || retailValueWithoutGstLocal,
       recentMovements: movements.slice(0, 8),
       lowStockItems: lowStockLocal,
       outOfStockItems: outOfStockLocal,
     };
-  }, [products, categories, suppliers, movements, statsExtra]);
+  }, [products, categories, brands, suppliers, movements, statsExtra]);
 
   const value = {
     ready,
     loading,
     error,
     categories,
+    brands,
     suppliers,
     products,
     movements,
     stats,
     getCategory,
+    getBrand,
     getSupplier,
     getProduct,
     getProductMovements,
     addCategory,
     updateCategory,
     deleteCategory,
+    addBrand,
+    updateBrand,
+    deleteBrand,
     addSupplier,
     updateSupplier,
     deleteSupplier,

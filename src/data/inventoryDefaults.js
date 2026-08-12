@@ -9,11 +9,10 @@ export const STOCK_MOVEMENT_TYPES = {
 
 export const emptyProduct = {
   name: '',
-  sku: '',
-  barcode: '',
+  brandId: '',
   categoryId: '',
   supplierId: '',
-    description: '',
+  description: '',
   purchaseDate: '',
   purchasePrice: 0,
   purchasePriceWithGst: 0,
@@ -21,10 +20,7 @@ export const emptyProduct = {
   sellingPriceWithGst: 0,
   taxRate: 18,
   stockQty: 0,
-  reorderLevel: 10,
-  reorderQty: 50,
-  location: '',
+  purchasedQuantity: 0,
   status: 'active',
   image: null,
-  hsn: '',
 };

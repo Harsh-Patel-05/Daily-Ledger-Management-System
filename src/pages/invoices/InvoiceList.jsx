@@ -21,6 +21,7 @@ export default function InvoiceList() {
   const { openModal } = useModal();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [deleteId, setDeleteId] = useState(null);
   const debouncedSearch = useDebounce(search);
 
@@ -29,12 +30,13 @@ export default function InvoiceList() {
       'invoiceNumber', 'customerName', 'customerBusiness',
     ]);
     if (statusFilter) list = list.filter((i) => i.status === statusFilter);
+    if (typeFilter) list = list.filter((i) => (i.gstType || (Number(i.taxAmount) > 0 ? 'GST' : 'Non-GST')) === typeFilter);
     return list;
-  }, [invoices, debouncedSearch, statusFilter]);
+  }, [invoices, debouncedSearch, statusFilter, typeFilter]);
 
   const { data, page, totalPages, total, perPage, goToPage, resetPage } = usePagination(filtered, 8);
 
-  useEffect(() => { resetPage(); }, [debouncedSearch, statusFilter]);
+  useEffect(() => { resetPage(); }, [debouncedSearch, statusFilter, typeFilter]);
 
   const statusVariant = {
     paid: 'success',
@@ -50,6 +52,16 @@ export default function InvoiceList() {
       render: (v) => <span className="font-semibold text-primary">{v}</span>,
     },
     { key: 'date', label: 'Date', render: (v) => formatDate(v) },
+    {
+      key: 'gstType',
+      label: 'Type',
+      render: (v, row) => {
+        const type = v || (Number(row.taxAmount) > 0 ? 'GST' : 'Non-GST');
+        return (
+          <Badge variant={type === 'GST' ? 'primary' : 'default'}>{type}</Badge>
+        );
+      },
+    },
     {
       key: 'customerName',
       label: 'Customer',
@@ -147,7 +159,7 @@ export default function InvoiceList() {
           },
           {
             title: 'Full Create Form',
-            desc: 'Multi-item GST invoice with logo, bank details & PDF.',
+            desc: 'Multi-item GST or Non-GST invoice with logo, bank details & PDF.',
             to: '/invoices/create',
             icon: FaDownload,
             color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30',
@@ -194,6 +206,15 @@ export default function InvoiceList() {
               { value: 'partial', label: 'Partial' },
               { value: 'unpaid', label: 'Unpaid' },
               { value: 'overdue', label: 'Overdue' },
+            ]}
+          />
+          <Filter
+            value={typeFilter}
+            onChange={setTypeFilter}
+            label="All Types"
+            options={[
+              { value: 'GST', label: 'GST' },
+              { value: 'Non-GST', label: 'Non-GST' },
             ]}
           />
         </div>

@@ -50,13 +50,14 @@ export function InventoryProvider({ children }) {
     setLoading(true);
     setError(null);
     try {
+      const settled = (p, fallback) => p.then((v) => v).catch(() => fallback);
       const [cats, brandList, sups, prods, movs, stats] = await Promise.all([
-        inventoryApi.listCategories(),
-        inventoryApi.listBrands(),
-        inventoryApi.listSuppliers(),
-        inventoryApi.listProducts(),
-        inventoryApi.listMovements(),
-        inventoryApi.getInventoryStats().catch(() => null),
+        settled(inventoryApi.listCategories(), []),
+        settled(inventoryApi.listBrands(), []),
+        settled(inventoryApi.listSuppliers(), []),
+        settled(inventoryApi.listProducts(), []),
+        settled(inventoryApi.listMovements(), []),
+        settled(inventoryApi.getInventoryStats(), null),
       ]);
       setCategories(cats);
       setBrands(brandList);
@@ -67,8 +68,6 @@ export function InventoryProvider({ children }) {
       setReady(true);
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Failed to load inventory');
-      // Allow app to continue; inventory pages can retry
       setReady(true);
     } finally {
       setLoading(false);

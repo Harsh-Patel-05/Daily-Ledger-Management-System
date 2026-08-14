@@ -21,7 +21,8 @@ export function createInvoice(data) {
     date: data.date,
     dueDate: data.dueDate || null,
     discount: data.discount || 0,
-    taxRate: data.taxRate ?? 18,
+    taxRate: data.taxRate ?? (data.gstType === 'Non-GST' ? 0 : 18),
+    gstType: data.gstType || (Number(data.taxRate) === 0 ? 'Non-GST' : 'GST'),
     paidAmount: data.paidAmount || 0,
     paymentMethod: data.paymentMethod || 'Credit',
     format: data.format || 'classic',
@@ -55,6 +56,7 @@ export function updateInvoice(id, data) {
   }
   if (data.dueDate !== undefined) payload.dueDate = data.dueDate;
   if (data.taxRate !== undefined) payload.taxRate = data.taxRate;
+  if (data.gstType !== undefined) payload.gstType = data.gstType;
   if (data.paidAmount !== undefined) payload.paidAmount = data.paidAmount;
   if (data.paymentMethod !== undefined) payload.paymentMethod = data.paymentMethod;
   return api.patch(`/invoices/${toPk(id) ?? id}/`, payload);

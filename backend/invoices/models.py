@@ -25,6 +25,10 @@ class Invoice(models.Model):
         BANK = 'Bank', 'Bank'
         CHEQUE = 'Cheque', 'Cheque'
 
+    class GstType(models.TextChoices):
+        GST = 'GST', 'GST'
+        NON_GST = 'Non-GST', 'Non-GST'
+
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -54,6 +58,9 @@ class Invoice(models.Model):
     payment_method = models.CharField(
         max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.CREDIT
     )
+    gst_type = models.CharField(
+        max_length=20, choices=GstType.choices, default=GstType.GST
+    )
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.UNPAID)
     format = models.CharField(max_length=20, choices=Format.choices, default=Format.CLASSIC)
     notes = models.TextField(blank=True)
@@ -76,8 +83,13 @@ class Invoice(models.Model):
         items = self.items.all()
         self.subtotal = sum((i.amount for i in items), start=0) or 0
         after_discount = max(0, self.subtotal - (self.discount or 0))
-        self.tax_amount = round(after_discount * (self.tax_rate or 0) / 100, 2)
-        self.total = after_discount + self.tax_amount
+        if self.gst_type == self.GstType.NON_GST:
+            self.tax_rate = 0
+            self.tax_amount = 0
+            self.total = after_discount
+        else:
+            self.tax_amount = round(after_discount * (self.tax_rate or 0) / 100, 2)
+            self.total = after_discount + self.tax_amount
         self.balance = max(0, self.total - (self.paid_amount or 0))
         if self.paid_amount >= self.total and self.total > 0:
             self.status = self.Status.PAID

@@ -4,7 +4,7 @@ Indian shop ledger (Roj Mel) — React frontend + Django REST backend.
 
 ## Tech Stack
 
-**Frontend:** React 19 + Vite · React Router · Context API · Tailwind CSS v4 · Recharts · Framer Motion  
+**Frontend:** React 19 + Vite · React Router · Context API · Tailwind CSS v4 · Recharts · Framer Motion
 
 **Backend:** Django 6 · DRF · SimpleJWT · django-filter · CORS · SQLite (dev)
 
@@ -30,7 +30,7 @@ python manage.py seed_demo
 python manage.py runserver 8001
 ```
 
-- API docs: http://127.0.0.1:8001/api/docs/  
+- API docs: http://127.0.0.1:8001/api/docs/
 - Full API notes: [backend/README.md](backend/README.md)
 
 ## Demo Login

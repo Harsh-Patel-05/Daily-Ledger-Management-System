@@ -12,13 +12,15 @@ from notifications.services import notify_invoice_created
 class InvoiceFilter(filters.FilterSet):
     status = filters.CharFilter(field_name='status')
     format = filters.CharFilter(field_name='format')
+    gstType = filters.CharFilter(field_name='gst_type')
+    gst_type = filters.CharFilter(field_name='gst_type')
     customer_id = filters.CharFilter(method='filter_customer')
     date_from = filters.DateFilter(field_name='date', lookup_expr='gte')
     date_to = filters.DateFilter(field_name='date', lookup_expr='lte')
 
     class Meta:
         model = Invoice
-        fields = ['status', 'format']
+        fields = ['status', 'format', 'gstType', 'gst_type']
 
     def filter_customer(self, queryset, name, value):
         if str(value).startswith('cust_'):
@@ -110,6 +112,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             customer_mobile=original.customer_mobile,
             discount=original.discount,
             tax_rate=original.tax_rate,
+            gst_type=original.gst_type,
             paid_amount=0,
             payment_method=original.payment_method,
             format=original.format,

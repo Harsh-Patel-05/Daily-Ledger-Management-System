@@ -105,7 +105,11 @@ export default function InvoiceView() {
             </Link>
             <div>
               <h1 className="text-2xl font-bold text-slate-800 dark:text-white">{invoice.invoiceNumber}</h1>
-              <p className="text-sm text-muted">{invoice.customerName}</p>
+              <p className="text-sm text-muted">
+                {invoice.customerName}
+                {' · '}
+                {invoice.gstType === 'Non-GST' ? 'Non-GST invoice' : 'GST tax invoice'}
+              </p>
             </div>
           </div>
           <div className="flex gap-2 flex-wrap">

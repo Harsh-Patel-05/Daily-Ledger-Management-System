@@ -47,6 +47,7 @@ export default function QuickCreateInvoiceModal() {
         rate: '',
         discount: 0,
         taxRate: settings.defaultTaxRate || 18,
+        gstType: settings.defaultGstMode === 'non_gst' ? 'Non-GST' : 'GST',
         paymentMethod: 'Credit',
       });
       fetchNextInvoiceNumber()
@@ -66,7 +67,7 @@ export default function QuickCreateInvoiceModal() {
     return calcInvoiceTotals(
       [{ quantity: form.quantity, rate: form.rate, amount }],
       form.discount,
-      form.taxRate
+      form.gstType === 'Non-GST' ? 0 : form.taxRate
     );
   }, [form, amount]);
 
@@ -130,7 +131,8 @@ export default function QuickCreateInvoiceModal() {
           amount,
         }],
         discount: Number(form.discount) || 0,
-        taxRate: Number(form.taxRate) || 0,
+        gstType: form.gstType || 'GST',
+        taxRate: form.gstType === 'Non-GST' ? 0 : (Number(form.taxRate) || 0),
         paidAmount: 0,
         paymentMethod: form.paymentMethod,
         notes: 'Created via quick invoice modal',
@@ -210,7 +212,22 @@ export default function QuickCreateInvoiceModal() {
         <Input label="Qty" type="number" value={form.quantity} onChange={set('quantity')} error={errors.quantity} />
         <Input label="Rate (₹)" type="number" value={form.rate} onChange={set('rate')} error={errors.rate} />
         <Input label="Discount" type="number" value={form.discount} onChange={set('discount')} />
-        <Input label="GST %" type="number" value={form.taxRate} onChange={set('taxRate')} />
+        <Dropdown
+          label="Invoice Type"
+          value={form.gstType}
+          onChange={(v) => setForm((f) => ({
+            ...f,
+            gstType: v,
+            taxRate: v === 'Non-GST' ? 0 : (f.taxRate || settings.defaultTaxRate || 18),
+          }))}
+          options={[
+            { value: 'GST', label: 'GST' },
+            { value: 'Non-GST', label: 'Non-GST' },
+          ]}
+        />
+        {form.gstType !== 'Non-GST' && (
+          <Input label="GST %" type="number" value={form.taxRate} onChange={set('taxRate')} />
+        )}
         <Dropdown
           label="Payment Method"
           value={form.paymentMethod}

@@ -47,6 +47,7 @@ export default function CreateInvoice() {
     taxRate: settings.defaultTaxRate || 18,
     paidAmount: 0,
     paymentMethod: 'Credit',
+    gstType: settings.defaultGstMode === 'non_gst' ? 'Non-GST' : 'GST',
     notes: 'Thank you for your business!',
     terms: 'Payment due within 15 days. Goods once sold will not be taken back.',
     format: DEFAULT_INVOICE_FORMAT,
@@ -73,9 +74,11 @@ export default function CreateInvoice() {
     return () => { cancelled = true; };
   }, [prefix]);
 
+  const gstSale = form.gstType === 'GST';
+  const effectiveTaxRate = gstSale ? form.taxRate : 0;
   const totals = useMemo(
-    () => calcInvoiceTotals(form.items, form.discount, form.taxRate),
-    [form.items, form.discount, form.taxRate]
+    () => calcInvoiceTotals(form.items, form.discount, effectiveTaxRate),
+    [form.items, form.discount, effectiveTaxRate]
   );
 
   const updateItem = (id, key, value) => {
@@ -135,7 +138,8 @@ export default function CreateInvoice() {
         ...form,
         items: lineItems,
         discount: Number(form.discount) || 0,
-        taxRate: Number(form.taxRate) || 0,
+        gstType: form.gstType,
+        taxRate: gstSale ? (Number(form.taxRate) || 0) : 0,
         paidAmount: Number(form.paidAmount) || 0,
       });
 
@@ -162,7 +166,7 @@ export default function CreateInvoice() {
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Create Invoice</h1>
-          <p className="text-sm text-muted">Pick inventory products to auto-deduct stock</p>
+          <p className="text-sm text-muted">GST or Non-GST sale — stock deducts when a product is selected</p>
         </div>
       </div>
 
@@ -192,6 +196,19 @@ export default function CreateInvoice() {
               placeholder="Select customer"
               error={errors.customerId}
               required
+            />
+            <Dropdown
+              label="Invoice Type"
+              value={form.gstType}
+              onChange={(v) => setForm({
+                ...form,
+                gstType: v,
+                taxRate: v === 'Non-GST' ? 0 : (form.taxRate || settings.defaultTaxRate || 18),
+              })}
+              options={[
+                { value: 'GST', label: 'GST (Tax Invoice)' },
+                { value: 'Non-GST', label: 'Non-GST (Bill / Invoice)' },
+              ]}
             />
             <Dropdown
               label="Payment Method"
@@ -251,12 +268,16 @@ export default function CreateInvoice() {
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
                     <div className="sm:col-span-2">
-                      <Input
-                        label={idx === 0 ? 'HSN' : undefined}
-                        value={item.hsn}
-                        onChange={(e) => updateItem(item.id, 'hsn', e.target.value)}
-                        placeholder="HSN"
-                      />
+                      {gstSale ? (
+                        <Input
+                          label={idx === 0 ? 'HSN' : undefined}
+                          value={item.hsn}
+                          onChange={(e) => updateItem(item.id, 'hsn', e.target.value)}
+                          placeholder="HSN"
+                        />
+                      ) : idx === 0 ? (
+                        <div className="text-xs text-muted pb-2">HSN not required for Non-GST</div>
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-2 sm:contents gap-2">
                       <div className="sm:col-span-2">
@@ -317,12 +338,19 @@ export default function CreateInvoice() {
               value={form.discount}
               onChange={(e) => setForm({ ...form, discount: e.target.value })}
             />
-            <Input
-              label="GST Rate (%)"
-              type="number"
-              value={form.taxRate}
-              onChange={(e) => setForm({ ...form, taxRate: e.target.value })}
-            />
+            {gstSale ? (
+              <Input
+                label="GST Rate (%)"
+                type="number"
+                value={form.taxRate}
+                onChange={(e) => setForm({ ...form, taxRate: e.target.value })}
+              />
+            ) : (
+              <div className="rounded-xl border border-border dark:border-slate-600 px-3.5 py-2.5">
+                <p className="text-xs text-muted">GST</p>
+                <p className="text-sm font-semibold mt-1">Not applicable</p>
+              </div>
+            )}
             <Input
               label="Paid Amount (₹)"
               type="number"
@@ -336,8 +364,8 @@ export default function CreateInvoice() {
               <p className="font-semibold">{formatCurrency(totals.subtotal)}</p>
             </div>
             <div>
-              <p className="text-xs text-muted">Tax</p>
-              <p className="font-semibold">{formatCurrency(totals.taxAmount)}</p>
+              <p className="text-xs text-muted">{gstSale ? 'Tax (GST)' : 'Tax'}</p>
+              <p className="font-semibold">{gstSale ? formatCurrency(totals.taxAmount) : '—'}</p>
             </div>
             <div>
               <p className="text-xs text-muted">Grand Total</p>

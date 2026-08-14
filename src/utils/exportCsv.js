@@ -51,6 +51,7 @@ export function transactionsToCsvRows(transactions = []) {
 export function invoicesToCsvRows(invoices = []) {
   return invoices.map((i) => ({
     InvoiceNumber: i.invoiceNumber,
+    Type: i.gstType || (Number(i.taxAmount) > 0 ? 'GST' : 'Non-GST'),
     Date: i.date,
     Customer: i.customerName,
     Subtotal: i.subtotal,

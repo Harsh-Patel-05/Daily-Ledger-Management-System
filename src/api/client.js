@@ -75,6 +75,43 @@ function pickErrorMessage(data, status) {
   return `Request failed (${status})`;
 }
 
+const MAX_PARALLEL = 3;
+let inflight = 0;
+const waiters = [];
+
+function acquireSlot() {
+  return new Promise((resolve) => {
+    const tryStart = () => {
+      if (inflight < MAX_PARALLEL) {
+        inflight += 1;
+        resolve();
+        return;
+      }
+      waiters.push(tryStart);
+    };
+    tryStart();
+  });
+}
+
+function releaseSlot() {
+  inflight = Math.max(0, inflight - 1);
+  const next = waiters.shift();
+  if (next) next();
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function queuedFetch(url, init) {
+  await acquireSlot();
+  try {
+    return await fetch(url, init);
+  } finally {
+    releaseSlot();
+  }
+}
+
 let refreshPromise = null;
 
 async function refreshAccessToken() {
@@ -112,7 +149,7 @@ function resolveUrl(path) {
   return `${API_BASE}${cleaned.startsWith('/') ? cleaned : `/${cleaned}`}`;
 }
 
-async function request(path, options = {}, retry = true) {
+async function request(path, options = {}, retry = true, attempt = 0) {
   const {
     method = 'GET',
     body,
@@ -132,29 +169,36 @@ async function request(path, options = {}, retry = true) {
   }
 
   const url = resolveUrl(path);
+  const init = {
+    method,
+    headers,
+    body: body == null || formData || body instanceof FormData
+      ? body
+      : typeof body === 'string'
+        ? body
+        : JSON.stringify(body),
+  };
 
   let res;
   try {
-    res = await fetch(url, {
-      method,
-      headers,
-      body: body == null || formData || body instanceof FormData
-        ? body
-        : typeof body === 'string'
-          ? body
-          : JSON.stringify(body),
-    });
+    res = await queuedFetch(url, init);
   } catch {
-    throw new ApiError(
-      'Cannot reach API. Ensure Django is running on port 8000 and restart Vite (npm run dev).',
-      0
-    );
+    if (attempt < 3 && method === 'GET') {
+      await sleep(400 * (attempt + 1));
+      return request(path, options, retry, attempt + 1);
+    }
+    throw new ApiError('Cannot reach API. Check that the backend is running.', 0);
+  }
+
+  if ([502, 503, 504].includes(res.status) && attempt < 3 && method === 'GET') {
+    await sleep(400 * (attempt + 1));
+    return request(path, options, retry, attempt + 1);
   }
 
   if (res.status === 401 && auth && retry) {
     try {
       await refreshAccessToken();
-      return request(path, options, false);
+      return request(path, options, false, 0);
     } catch {
       clearAuthStorage();
       throw new ApiError('Session expired. Please login again.', 401);

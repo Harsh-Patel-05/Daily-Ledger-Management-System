@@ -27,6 +27,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
         source='paid_amount', max_digits=12, decimal_places=2, required=False
     )
     paymentMethod = serializers.CharField(source='payment_method', required=False)
+    gstType = serializers.CharField(source='gst_type', required=False)
 
     class Meta:
         model = Invoice
@@ -37,7 +38,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'customer_gst', 'customer_mobile',
             'subtotal', 'discount', 'tax_rate', 'taxRate', 'tax_amount',
             'total', 'paid_amount', 'paidAmount', 'balance',
-            'payment_method', 'paymentMethod', 'status', 'format',
+            'payment_method', 'paymentMethod', 'gst_type', 'gstType', 'status', 'format',
             'notes', 'terms', 'items', 'created_at', 'updated_at',
         )
         read_only_fields = (
@@ -107,6 +108,15 @@ class InvoiceSerializer(serializers.ModelSerializer):
             else:
                 invoice_number = Invoice.next_number(owner, prefix)
 
+            gst_type = validated.get('gst_type') or Invoice.GstType.GST
+            if gst_type not in (Invoice.GstType.GST, Invoice.GstType.NON_GST):
+                gst_type = Invoice.GstType.GST
+            tax_rate = validated.get('tax_rate')
+            if gst_type == Invoice.GstType.NON_GST:
+                tax_rate = 0
+            elif tax_rate is None:
+                tax_rate = 18
+
             invoice = Invoice.objects.create(
                 owner=owner,
                 customer=customer,
@@ -116,10 +126,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
                 customer_name=customer.name,
                 customer_business=customer.business_name,
                 customer_address=customer.address,
-                customer_gst=customer.gst,
+                customer_gst=customer.gst if gst_type == Invoice.GstType.GST else '',
                 customer_mobile=customer.mobile,
                 discount=validated.get('discount') or 0,
-                tax_rate=validated.get('tax_rate') if validated.get('tax_rate') is not None else 18,
+                tax_rate=tax_rate,
+                gst_type=gst_type,
                 paid_amount=validated.get('paid_amount') or 0,
                 payment_method=validated.get('payment_method') or Invoice.PaymentMethod.CREDIT,
                 format=validated.get('format') or Invoice.Format.CLASSIC,
@@ -189,9 +200,11 @@ class InvoiceSerializer(serializers.ModelSerializer):
             items_data = self.initial_data.get('items')
 
         for attr in ('date', 'due_date', 'discount', 'tax_rate', 'paid_amount',
-                     'payment_method', 'format', 'notes', 'terms'):
+                     'payment_method', 'gst_type', 'format', 'notes', 'terms'):
             if attr in validated:
                 setattr(instance, attr, validated[attr])
+        if instance.gst_type == Invoice.GstType.NON_GST:
+            instance.tax_rate = 0
         instance.save()
 
         if items_data is not None:
@@ -243,6 +256,7 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'paidAmount': float(instance.paid_amount),
             'balance': float(instance.balance),
             'paymentMethod': instance.payment_method,
+            'gstType': instance.gst_type,
             'status': instance.status,
             'format': instance.format,
             'notes': instance.notes,

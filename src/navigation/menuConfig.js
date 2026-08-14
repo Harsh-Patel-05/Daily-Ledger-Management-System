@@ -14,7 +14,7 @@ export const menuConfig = [
     label: 'Parties',
     icon: 'FaUsers',
     children: [
-      { to: '/parties/customers', label: 'Customers' },
+      { to: '/parties/customers', label: 'Customers', aliases: ['/customers'] },
       { to: '/parties/suppliers', label: 'Suppliers' },
       { to: '/parties/outstanding', label: 'Outstanding' },
     ],
@@ -24,7 +24,7 @@ export const menuConfig = [
     label: 'Inventory',
     icon: 'FaBoxes',
     children: [
-      { to: '/inventory/products', label: 'Products' },
+      { to: '/inventory/products', label: 'Products', aliases: ['/inventory/add'] },
       { to: '/inventory/categories', label: 'Categories' },
       { to: '/inventory/brands', label: 'Brands' },
       { to: '/inventory/stock', label: 'Stock' },
@@ -37,7 +37,7 @@ export const menuConfig = [
     label: 'Sales',
     icon: 'FaFileInvoiceDollar',
     children: [
-      { to: '/sales/invoices', label: 'Sales Invoices' },
+      { to: '/sales/invoices', label: 'Sales Invoices', aliases: ['/invoices'] },
       { to: '/sales/payments', label: 'Sales Payments' },
       { to: '/sales/returns', label: 'Sales Returns' },
     ],
@@ -69,7 +69,7 @@ export const menuConfig = [
     children: [
       { to: '/ledger/party', label: 'Party Ledger' },
       { to: '/ledger/cash-book', label: 'Cash Book' },
-      { to: '/ledger/day-book', label: 'Day Book' },
+      { to: '/ledger/day-book', label: 'Day Book', aliases: ['/transactions'] },
       { to: '/ledger/opening-balance', label: 'Opening Balance' },
       { to: '/ledger/closing-balance', label: 'Closing Balance' },
     ],
@@ -101,8 +101,9 @@ export const menuConfig = [
     id: 'reports',
     label: 'Reports',
     icon: 'FaChartBar',
+    aliases: ['/reports', '/analytics'],
     children: [
-      { to: '/reports/sales', label: 'Sales Reports' },
+      { to: '/reports/sales', label: 'Sales Reports', aliases: ['/reports/classic', '/analytics'] },
       { to: '/reports/purchase', label: 'Purchase Reports' },
       { to: '/reports/payments', label: 'Payment Reports' },
       { to: '/reports/outstanding', label: 'Outstanding Reports' },
@@ -143,46 +144,90 @@ export const accountLinks = [
   { to: '/profile', label: 'Profile', icon: 'FaUser' },
 ];
 
-/** Resolve current page label from pathname for navbar title. */
-export function getPageTitle(pathname = '') {
-  if (!pathname || pathname === '/') return 'Dashboard';
+function normalizePath(pathname = '') {
+  if (!pathname) return '/';
+  const [path] = pathname.split(/[?#]/);
+  if (path.length > 1 && path.endsWith('/')) return path.slice(0, -1);
+  return path || '/';
+}
 
-  let best = null;
-  let bestLen = -1;
+/** True when pathname is this route or a nested page under it. */
+export function pathMatches(pathname, to) {
+  if (!to) return false;
+  const path = normalizePath(pathname);
+  const base = normalizePath(to);
+  return path === base || path.startsWith(`${base}/`);
+}
 
-  const consider = (to, label, section) => {
-    if (!to) return;
-    const match = pathname === to || pathname.startsWith(`${to}/`);
-    if (!match) return;
-    if (to.length > bestLen) {
-      bestLen = to.length;
-      best = { label, section };
-    }
+function patternsFor(entry) {
+  if (!entry) return [];
+  return [entry.to, ...(entry.aliases || [])].filter(Boolean);
+}
+
+/**
+ * Longest-prefix match so /expenses/categories wins over /expenses,
+ * and aliases like /customers/:id still highlight Parties → Customers.
+ */
+export function getActiveNav(pathname = '') {
+  const path = normalizePath(pathname);
+  let best = { section: null, child: null, score: -1 };
+
+  const consider = (section, child, to) => {
+    if (!pathMatches(path, to)) return;
+    const score = normalizePath(to).length;
+    const better = score > best.score || (score === best.score && child && !best.child);
+    if (better) best = { section, child, score };
   };
 
   menuConfig.forEach((item) => {
-    if (item.to) consider(item.to, item.label, item.label);
+    if (item.to) consider(item, null, item.to);
+    (item.aliases || []).forEach((alias) => consider(item, null, alias));
     (item.children || []).forEach((child) => {
-      consider(child.to, child.label, item.label);
+      patternsFor(child).forEach((to) => consider(item, child, to));
     });
   });
 
-  accountLinks.forEach((item) => consider(item.to, item.label, 'Account'));
+  accountLinks.forEach((item) => {
+    patternsFor(item).forEach((to) => consider({ id: 'account', label: 'Account' }, item, to));
+  });
 
-  const extras = [
-    { to: '/customers', label: 'Customers', section: 'Parties' },
-    { to: '/invoices', label: 'Sales Invoices', section: 'Sales' },
-    { to: '/inventory', label: 'Products', section: 'Inventory' },
-    { to: '/transactions', label: 'Transactions', section: 'Account' },
-    { to: '/analytics', label: 'Analytics', section: 'Reports' },
-    { to: '/profile', label: 'Profile', section: 'Account' },
-    { to: '/notifications', label: 'Notifications', section: 'Account' },
-  ];
-  extras.forEach((e) => consider(e.to, e.label, e.section));
-
-  if (!best) return 'Daily Ledger';
-  if (best.section && best.section !== best.label) {
-    return { title: best.label, section: best.section };
+  // /inventory/:id (product details / edit) is not a named submenu
+  const invSeg = path.split('/').filter(Boolean);
+  const namedInventory = new Set([
+    'products', 'categories', 'brands', 'stock', 'low-stock', 'stock-adjustment', 'suppliers', 'add',
+  ]);
+  if (invSeg[0] === 'inventory' && invSeg[1] && !namedInventory.has(invSeg[1])) {
+    const inventory = menuConfig.find((i) => i.id === 'inventory');
+    const products = inventory?.children?.find((c) => c.to === '/inventory/products');
+    if (inventory && products) {
+      best = { section: inventory, child: products, score: '/inventory/products'.length };
+    }
   }
-  return { title: best.label, section: null };
+
+  return best;
+}
+
+export function sectionIsActive(item, pathname) {
+  const { section } = getActiveNav(pathname);
+  return section?.id === item.id;
+}
+
+export function childIsActive(child, pathname) {
+  const { child: activeChild } = getActiveNav(pathname);
+  return !!activeChild && activeChild.to === child.to;
+}
+
+/** Resolve current page label from pathname for navbar title. */
+export function getPageTitle(pathname = '') {
+  if (!pathname || pathname === '/') return { title: 'Dashboard', section: null };
+
+  const { section, child } = getActiveNav(pathname);
+  if (!section) return { title: 'Daily Ledger', section: null };
+
+  const label = child?.label || section.label;
+  const sectionLabel = section.id === 'account' ? 'Account' : section.label;
+  if (sectionLabel && sectionLabel !== label) {
+    return { title: label, section: sectionLabel };
+  }
+  return { title: label, section: null };
 }

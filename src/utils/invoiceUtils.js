@@ -193,6 +193,13 @@ export function calcInvoiceTotals(items = [], discount = 0, taxRate = 18) {
   return { subtotal, discount: Number(discount || 0), taxRate: Number(taxRate || 0), taxAmount, total };
 }
 
+export function isGstSale(invoice) {
+  if (!invoice) return true;
+  if (invoice.gstType === 'Non-GST') return false;
+  if (invoice.gstType === 'GST') return true;
+  return Number(invoice.taxRate || invoice.taxAmount || 0) > 0;
+}
+
 export function nextInvoiceNumber(invoices = [], prefix = 'SGT') {
   const year = new Date().getFullYear();
   const pattern = new RegExp(`^${prefix}-${year}-(\\d+)$`);

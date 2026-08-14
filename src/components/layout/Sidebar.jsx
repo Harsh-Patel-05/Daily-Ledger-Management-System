@@ -22,7 +22,7 @@ import {
 } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { cn } from '../../utils/formatters';
-import { menuConfig, accountLinks } from '../../navigation/menuConfig';
+import { menuConfig, accountLinks, getActiveNav, sectionIsActive, childIsActive } from '../../navigation/menuConfig';
 
 const ICONS = {
   FaTachometerAlt,
@@ -41,27 +41,15 @@ const ICONS = {
   FaUserShield,
 };
 
-function sectionIsActive(item, pathname) {
-  if (item.to) return pathname === item.to || pathname.startsWith(`${item.to}/`);
-  return (item.children || []).some((c) => pathname === c.to || pathname.startsWith(`${c.to}/`));
-}
-
-function childIsActive(childTo, pathname) {
-  const prefixOnly = ['/gst', '/expenses', '/users', '/reports'].includes(childTo);
-  if (prefixOnly) return pathname === childTo;
-  return pathname === childTo || pathname.startsWith(`${childTo}/`);
-}
-
 function getInitialOpenSections(pathname) {
-  const active = menuConfig.find(
-    (item) => item.children && sectionIsActive(item, pathname)
-  );
-  return active ? { [active.id]: true } : {};
+  const { section } = getActiveNav(pathname);
+  return section?.id && section.id !== 'account' && section.children ? { [section.id]: true } : {};
 }
 
 export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen, sidebarCollapsed, unreadCount, profile } = useApp();
   const location = useLocation();
+  const { section: activeSection, child: activeChild } = getActiveNav(location.pathname);
   const [openSections, setOpenSections] = useState(() => getInitialOpenSections(location.pathname));
 
   const desktopNavRef = useRef(null);
@@ -73,14 +61,13 @@ export default function Sidebar() {
     ? profile.address.split(',').slice(-2).join(',').trim() || profile.address
     : 'Update profile details';
 
-  // Accordion: only the active module section stays open
+  // Accordion: keep the active module section open
   useEffect(() => {
-    const activeId = menuConfig.find(
-      (item) => item.children && sectionIsActive(item, location.pathname)
-    )?.id;
+    const activeId = activeSection?.id && activeSection.id !== 'account' && activeSection.children
+      ? activeSection.id
+      : null;
 
     setOpenSections((prev) => {
-      // Dashboard / Notifications / Profile: no module section → close all
       if (!activeId) {
         const anyOpen = Object.values(prev).some(Boolean);
         return anyOpen ? {} : prev;
@@ -89,7 +76,7 @@ export default function Sidebar() {
       if (keys.length === 1 && keys[0] === activeId) return prev;
       return { [activeId]: true };
     });
-  }, [location.pathname]);
+  }, [location.pathname, activeSection?.id]);
 
   // Product tour can force-open a section while highlighting it
   useEffect(() => {
@@ -163,9 +150,9 @@ export default function Sidebar() {
 
   const childLinkClass = (active) =>
     cn(
-      'flex items-center gap-2 pl-10 pr-3 py-2 rounded-lg text-[13px] font-medium transition-colors',
+      'flex items-center gap-2 pl-10 pr-3 py-2 rounded-lg text-[13px] font-semibold transition-colors',
       active
-        ? 'text-primary bg-primary/10 dark:bg-primary/20'
+        ? 'bg-primary text-white shadow-sm'
         : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60'
     );
 
@@ -180,6 +167,7 @@ export default function Sidebar() {
             <NavLink
               key={item.id}
               to={item.to}
+              end
               data-tour={`nav-${item.id}`}
               data-nav-active={active ? 'true' : undefined}
               onClick={() => {
@@ -219,11 +207,11 @@ export default function Sidebar() {
               type="button"
               onClick={() => toggleSection(item.id)}
               data-tour={`nav-${item.id}`}
-              data-nav-active={active && !item.children.some((c) => childIsActive(c.to, location.pathname)) ? 'true' : undefined}
+              data-nav-active={active && !activeChild ? 'true' : undefined}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
                 active
-                  ? 'text-primary bg-primary/5 dark:bg-primary/10'
+                  ? 'text-primary bg-primary/10 dark:bg-primary/15 ring-1 ring-primary/25'
                   : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700/50'
               )}
             >
@@ -231,7 +219,7 @@ export default function Sidebar() {
               <span className="flex-1 text-left">{item.label}</span>
               <FaChevronDown
                 size={11}
-                className={cn('text-slate-400 transition-transform', expanded && 'rotate-180')}
+                className={cn('text-slate-400 transition-transform', expanded && 'rotate-180', active && 'text-primary')}
               />
             </button>
             <AnimatePresence initial={false}>
@@ -246,11 +234,12 @@ export default function Sidebar() {
                 >
                   <div className="py-1 space-y-0.5">
                     {item.children.map((child) => {
-                      const exactish = childIsActive(child.to, location.pathname);
+                      const exactish = childIsActive(child, location.pathname);
                       return (
                         <NavLink
                           key={child.to}
                           to={child.to}
+                          end={['/gst', '/expenses', '/users'].includes(child.to)}
                           data-nav-active={exactish ? 'true' : undefined}
                           onClick={() => setSidebarOpen(false)}
                           className={childLinkClass(exactish)}

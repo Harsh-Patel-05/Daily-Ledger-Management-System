@@ -1,0 +1,17 @@
+# Run from repo root: pre-commit run --all-files
+# (also works from backend/ — pre-commit looks at the git root)
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-json
+        exclude: ^package-lock\.json$
+      - id: mixed-line-ending
+        args: ["--fix=lf"]

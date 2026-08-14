@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useLocalModules } from '../../context/LocalModulesContext';
 import { formatCurrency } from '../../utils/formatters';
+import { isGstSale } from '../../utils/invoiceUtils';
 import PageHeader from '../../components/pages/PageHeader';
 import ReportPage, { ReportLinks } from '../../components/pages/ReportPage';
 import { Card, StatCard, Table } from '../../components/ui';
@@ -13,8 +14,8 @@ function useGstStats() {
   const bills = purchaseBills.items;
 
   return useMemo(() => {
-    const gstSales = invoices.filter((i) => Number(i.taxAmount || i.gstAmount || 0) > 0 || i.gstType === 'GST');
-    const nonGstSales = invoices.filter((i) => !(Number(i.taxAmount || i.gstAmount || 0) > 0 || i.gstType === 'GST'));
+    const gstSales = invoices.filter((i) => isGstSale(i));
+    const nonGstSales = invoices.filter((i) => !isGstSale(i));
     const salesTaxable = gstSales.reduce((s, i) => s + (Number(i.subtotal || i.taxableAmount) || 0), 0);
     const salesGst = gstSales.reduce((s, i) => s + (Number(i.taxAmount || i.gstAmount) || 0), 0);
     const salesTotal = invoices.reduce((s, i) => s + (Number(i.total || i.grandTotal) || 0), 0);
@@ -96,6 +97,7 @@ export function HsnSacSummary() {
   const rows = useMemo(() => {
     const map = {};
     invoices.forEach((inv) => {
+      if (!isGstSale(inv)) return;
       (inv.items || []).forEach((item) => {
         const hsn = item.hsn || item.hsnSac || 'N/A';
         if (!map[hsn]) map[hsn] = { id: hsn, hsn, qty: 0, taxable: 0, tax: 0 };

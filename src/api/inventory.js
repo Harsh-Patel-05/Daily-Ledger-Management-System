@@ -148,4 +148,3 @@ export function importProducts(file, { updateExisting = true } = {}) {
   fd.append('updateExisting', updateExisting ? 'true' : 'false');
   return api.upload('/inventory/products/import/', fd, { method: 'POST' });
 }
-

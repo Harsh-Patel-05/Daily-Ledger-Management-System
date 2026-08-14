@@ -1,13 +1,14 @@
 import { forwardRef } from 'react';
 import { formatCurrency, formatDate, formatPhone } from '../../utils/formatters';
-import { numberToWords } from '../../utils/invoiceUtils';
+import { numberToWords, isGstSale } from '../../utils/invoiceUtils';
 import { DEFAULT_LOGO } from '../../assets/defaultLogo';
 
 function useInvoiceBits(invoice, profile, logo) {
   const shopLogo = logo || profile?.logo || DEFAULT_LOGO;
-  const cgst = (invoice.taxAmount || 0) / 2;
-  const sgst = (invoice.taxAmount || 0) / 2;
-  return { shopLogo, cgst, sgst };
+  const gst = isGstSale(invoice);
+  const cgst = gst ? (invoice.taxAmount || 0) / 2 : 0;
+  const sgst = gst ? (invoice.taxAmount || 0) / 2 : 0;
+  return { shopLogo, cgst, sgst, gst };
 }
 
 function BankBlock({ profile }) {
@@ -17,19 +18,74 @@ function BankBlock({ profile }) {
       {profile.bankName && <p><span className="font-semibold">Bank:</span> {profile.bankName}</p>}
       {profile.bankAccount && <p><span className="font-semibold">A/C:</span> {profile.bankAccount}</p>}
       {profile.bankIFSC && <p><span className="font-semibold">IFSC:</span> {profile.bankIFSC}</p>}
+      {profile.bankBranch && <p><span className="font-semibold">Branch:</span> {profile.bankBranch}</p>}
       {profile.upiId && <p><span className="font-semibold">UPI:</span> {profile.upiId}</p>}
     </div>
   );
 }
 
-function ItemsTable({ items, dense }) {
+function TotalsBox({ invoice, cgst, sgst, gst }) {
+  const taxRate = gst ? Number(invoice.taxRate || 0) : 0;
+  const halfRate = taxRate ? taxRate / 2 : 0;
+  const paid = Number(invoice.paidAmount || 0);
+  const balance = Number(invoice.balance ?? Math.max(0, (invoice.total || 0) - paid));
+
+  return (
+    <table className="w-full text-xs border-collapse">
+      <tbody>
+        <tr>
+          <td className="py-1 pr-6 text-slate-500">Subtotal</td>
+          <td className="py-1 text-right font-medium">{formatCurrency(invoice.subtotal)}</td>
+        </tr>
+        {(invoice.discount || 0) > 0 && (
+          <tr>
+            <td className="py-1 pr-6 text-slate-500">Discount</td>
+            <td className="py-1 text-right font-medium">− {formatCurrency(invoice.discount)}</td>
+          </tr>
+        )}
+        {gst && taxRate > 0 && (
+          <>
+            <tr>
+              <td className="py-1 pr-6 text-slate-500">CGST{halfRate ? ` @ ${halfRate}%` : ''}</td>
+              <td className="py-1 text-right font-medium">{formatCurrency(cgst)}</td>
+            </tr>
+            <tr>
+              <td className="py-1 pr-6 text-slate-500">SGST{halfRate ? ` @ ${halfRate}%` : ''}</td>
+              <td className="py-1 text-right font-medium">{formatCurrency(sgst)}</td>
+            </tr>
+          </>
+        )}
+        <tr className="border-t border-slate-300">
+          <td className="pt-2 pr-6 font-bold text-sm">Grand Total</td>
+          <td className="pt-2 text-right font-bold text-sm text-primary">{formatCurrency(invoice.total)}</td>
+        </tr>
+        {paid > 0 && (
+          <>
+            <tr>
+              <td className="py-1 pr-6 text-slate-500">Amount Paid</td>
+              <td className="py-1 text-right font-medium">{formatCurrency(paid)}</td>
+            </tr>
+            <tr>
+              <td className="py-1 pr-6 font-semibold">Balance Due</td>
+              <td className="py-1 text-right font-semibold">{formatCurrency(balance)}</td>
+            </tr>
+          </>
+        )}
+      </tbody>
+    </table>
+  );
+}
+
+function ItemsTable({ items, dense, showHsn = true }) {
   return (
     <table className="w-full text-sm">
       <thead>
         <tr className={dense ? 'bg-slate-800 text-white text-[10px]' : 'bg-primary text-white'}>
           <th className={`text-left font-semibold ${dense ? 'px-1.5 py-1' : 'px-3 py-2.5 text-xs'}`}>#</th>
           <th className={`text-left font-semibold ${dense ? 'px-1.5 py-1' : 'px-3 py-2.5 text-xs'}`}>Item</th>
-          <th className={`text-left font-semibold ${dense ? 'px-1.5 py-1' : 'px-3 py-2.5 text-xs'}`}>HSN</th>
+          {showHsn && (
+            <th className={`text-left font-semibold ${dense ? 'px-1.5 py-1' : 'px-3 py-2.5 text-xs'}`}>HSN</th>
+          )}
           <th className={`text-center font-semibold ${dense ? 'px-1.5 py-1' : 'px-3 py-2.5 text-xs'}`}>Qty</th>
           <th className={`text-right font-semibold ${dense ? 'px-1.5 py-1' : 'px-3 py-2.5 text-xs'}`}>Rate</th>
           <th className={`text-right font-semibold ${dense ? 'px-1.5 py-1' : 'px-3 py-2.5 text-xs'}`}>Amt</th>
@@ -40,7 +96,9 @@ function ItemsTable({ items, dense }) {
           <tr key={item.id || idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
             <td className={`text-slate-500 ${dense ? 'px-1.5 py-1 text-[10px]' : 'px-3 py-2.5 text-xs'}`}>{idx + 1}</td>
             <td className={`font-medium ${dense ? 'px-1.5 py-1 text-[10px]' : 'px-3 py-2.5 text-xs'}`}>{item.description}</td>
-            <td className={`text-slate-500 ${dense ? 'px-1.5 py-1 text-[10px]' : 'px-3 py-2.5 text-xs'}`}>{item.hsn || '—'}</td>
+            {showHsn && (
+              <td className={`text-slate-500 ${dense ? 'px-1.5 py-1 text-[10px]' : 'px-3 py-2.5 text-xs'}`}>{item.hsn || '—'}</td>
+            )}
             <td className={`text-center ${dense ? 'px-1.5 py-1 text-[10px]' : 'px-3 py-2.5 text-xs'}`}>{item.quantity}</td>
             <td className={`text-right ${dense ? 'px-1.5 py-1 text-[10px]' : 'px-3 py-2.5 text-xs'}`}>{formatCurrency(item.rate)}</td>
             <td className={`text-right font-semibold ${dense ? 'px-1.5 py-1 text-[10px]' : 'px-3 py-2.5 text-xs'}`}>{formatCurrency(item.amount)}</td>
@@ -53,7 +111,7 @@ function ItemsTable({ items, dense }) {
 
 /** Classic GST Tax Invoice */
 export const ClassicInvoice = forwardRef(function ClassicInvoice({ invoice, profile, logo }, ref) {
-  const { shopLogo, cgst, sgst } = useInvoiceBits(invoice, profile, logo);
+  const { shopLogo, cgst, sgst, gst } = useInvoiceBits(invoice, profile, logo);
   return (
     <div ref={ref} className="bg-white text-slate-800 w-full max-w-[800px] mx-auto p-8 sm:p-10" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <div className="flex flex-col sm:flex-row justify-between gap-6 border-b-2 border-primary pb-6">
@@ -63,44 +121,95 @@ export const ClassicInvoice = forwardRef(function ClassicInvoice({ invoice, prof
             <h1 className="text-xl sm:text-2xl font-bold text-primary">{profile?.shopName}</h1>
             <p className="text-xs text-slate-500 mt-1 max-w-xs">{profile?.address}</p>
             <p className="text-xs text-slate-500 mt-1">Ph: {formatPhone(profile?.mobile)}</p>
-            {profile?.gst && <p className="text-xs font-semibold mt-1">GSTIN: {profile.gst}</p>}
+            {profile?.email && <p className="text-xs text-slate-500">Email: {profile.email}</p>}
+            {gst && profile?.gst && <p className="text-xs font-semibold mt-1">GSTIN: {profile.gst}</p>}
           </div>
         </div>
         <div className="sm:text-right">
-          <p className="text-2xl font-bold">TAX INVOICE</p>
-          <p className="text-sm font-semibold text-primary mt-1">{invoice.invoiceNumber}</p>
-          <p className="text-xs text-slate-500 mt-2">Date: {formatDate(invoice.date)}</p>
-          {invoice.dueDate && <p className="text-xs text-slate-500">Due: {formatDate(invoice.dueDate)}</p>}
+          <p className="text-2xl font-bold tracking-wide">{gst ? 'TAX INVOICE' : 'INVOICE'}</p>
+          {!gst && <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mt-0.5">Non-GST</p>}
+          <table className="mt-3 text-xs sm:ml-auto">
+            <tbody>
+              <tr>
+                <td className="pr-3 py-0.5 text-slate-500 text-left">Invoice No.</td>
+                <td className="py-0.5 font-semibold text-primary text-right">{invoice.invoiceNumber}</td>
+              </tr>
+              <tr>
+                <td className="pr-3 py-0.5 text-slate-500 text-left">Invoice Date</td>
+                <td className="py-0.5 font-medium text-right">{formatDate(invoice.date)}</td>
+              </tr>
+              {invoice.dueDate && (
+                <tr>
+                  <td className="pr-3 py-0.5 text-slate-500 text-left">Due Date</td>
+                  <td className="py-0.5 font-medium text-right">{formatDate(invoice.dueDate)}</td>
+                </tr>
+              )}
+              {invoice.paymentMethod && (
+                <tr>
+                  <td className="pr-3 py-0.5 text-slate-500 text-left">Payment</td>
+                  <td className="py-0.5 font-medium text-right">{invoice.paymentMethod}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-      <div className="grid sm:grid-cols-2 gap-4 mt-6">
-        <div className="bg-slate-50 rounded-xl p-4">
-          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2">Bill To</p>
-          <p className="text-sm font-bold">{invoice.customerName}</p>
-          <p className="text-xs text-slate-600">{invoice.customerBusiness}</p>
-          <p className="text-xs text-slate-500 mt-1">{invoice.customerAddress}</p>
-          {invoice.customerGst && <p className="text-xs font-semibold mt-1">GSTIN: {invoice.customerGst}</p>}
+
+      <div className="mt-6 border border-slate-200 rounded-lg p-4">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-2">Bill To</p>
+        <p className="text-sm font-bold">{invoice.customerName}</p>
+        {invoice.customerBusiness && <p className="text-xs text-slate-600">{invoice.customerBusiness}</p>}
+        {invoice.customerAddress && <p className="text-xs text-slate-500 mt-1">{invoice.customerAddress}</p>}
+        {invoice.customerMobile && (
+          <p className="text-xs text-slate-500 mt-1">Ph: {formatPhone(invoice.customerMobile)}</p>
+        )}
+        {gst && invoice.customerGst && (
+          <p className="text-xs font-semibold mt-1">GSTIN: {invoice.customerGst}</p>
+        )}
+      </div>
+
+      <div className="mt-6 overflow-x-auto border border-slate-200 rounded-lg">
+        <ItemsTable items={invoice.items} showHsn={gst} />
+      </div>
+
+      <div className="mt-0 grid sm:grid-cols-2 gap-6 border border-t-0 border-slate-200 rounded-b-lg px-4 py-4">
+        <div className="space-y-3">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Amount in Words</p>
+            <p className="text-xs italic mt-1 font-medium text-slate-700">{numberToWords(invoice.total)}</p>
+          </div>
+          {(profile?.bankName || profile?.upiId) && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Bank Details</p>
+              <BankBlock profile={profile} />
+            </div>
+          )}
+          {invoice.notes && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Notes</p>
+              <p className="text-xs text-slate-500 mt-1">{invoice.notes}</p>
+            </div>
+          )}
+          {invoice.terms && (
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Terms</p>
+              <p className="text-xs text-slate-500 mt-1">{invoice.terms}</p>
+            </div>
+          )}
         </div>
-        <div className="bg-slate-50 rounded-xl p-4 space-y-1 text-xs">
-          <p className="text-[10px] font-bold uppercase text-slate-400 mb-2">Summary</p>
-          <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
-          <div className="flex justify-between"><span>Discount</span><span>{formatCurrency(invoice.discount || 0)}</span></div>
-          <div className="flex justify-between"><span>CGST</span><span>{formatCurrency(cgst)}</span></div>
-          <div className="flex justify-between"><span>SGST</span><span>{formatCurrency(sgst)}</span></div>
-          <div className="flex justify-between font-bold text-sm pt-2 border-t"><span>Total</span><span className="text-primary">{formatCurrency(invoice.total)}</span></div>
-          <div className="pt-2"><BankBlock profile={profile} /></div>
+        <div className="sm:max-w-[260px] sm:ml-auto w-full">
+          <TotalsBox invoice={invoice} cgst={cgst} sgst={sgst} gst={gst} />
         </div>
       </div>
-      <div className="mt-6 overflow-x-auto"><ItemsTable items={invoice.items} /></div>
-      <div className="mt-6 flex justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase text-slate-400">Amount in Words</p>
-          <p className="text-xs italic mt-1">{numberToWords(invoice.total)}</p>
-          {invoice.notes && <p className="text-xs text-slate-500 mt-3">{invoice.notes}</p>}
-        </div>
+
+      <div className="mt-8 flex justify-between items-end gap-4">
+        <p className="text-[10px] text-slate-400 max-w-[55%]">
+          {gst ? 'This is a computer-generated tax invoice.' : 'This is a computer-generated invoice (Non-GST).'}
+        </p>
         <div className="text-center">
-          <div className="h-12 border-b border-slate-300 w-36 mb-1" />
+          <div className="h-12 border-b border-slate-400 w-40 mb-1" />
           <p className="text-[10px] text-slate-500">Authorized Signatory</p>
+          <p className="text-[10px] text-slate-400">For {profile?.shopName || 'the seller'}</p>
         </div>
       </div>
     </div>
@@ -109,7 +218,7 @@ export const ClassicInvoice = forwardRef(function ClassicInvoice({ invoice, prof
 
 /** Modern Pro */
 export const ModernInvoice = forwardRef(function ModernInvoice({ invoice, profile, logo }, ref) {
-  const { shopLogo, cgst, sgst } = useInvoiceBits(invoice, profile, logo);
+  const { shopLogo, cgst, sgst, gst } = useInvoiceBits(invoice, profile, logo);
   return (
     <div ref={ref} className="bg-white text-slate-800 w-full max-w-[800px] mx-auto overflow-hidden" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-slate-900 text-white p-8">
@@ -123,7 +232,7 @@ export const ModernInvoice = forwardRef(function ModernInvoice({ invoice, profil
             </div>
           </div>
           <div className="text-right">
-            <p className="text-xs uppercase tracking-[0.2em] text-white/60">Invoice</p>
+            <p className="text-xs uppercase tracking-[0.2em] text-white/60">{gst ? 'Tax Invoice' : 'Invoice'}</p>
             <p className="text-xl font-bold mt-1">{invoice.invoiceNumber}</p>
             <p className="text-xs text-white/70 mt-2">{formatDate(invoice.date)}</p>
           </div>
@@ -142,11 +251,13 @@ export const ModernInvoice = forwardRef(function ModernInvoice({ invoice, profil
             <p className="text-2xl font-bold text-blue-700">{formatCurrency(invoice.balance ?? invoice.total)}</p>
           </div>
         </div>
-        <ItemsTable items={invoice.items} />
+        <ItemsTable items={invoice.items} showHsn={gst} />
         <div className="mt-6 flex justify-end">
           <div className="w-56 space-y-1 text-xs">
             <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
-            <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(invoice.taxAmount)}</span></div>
+            {gst && (
+              <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(invoice.taxAmount)}</span></div>
+            )}
             <div className="flex justify-between text-base font-bold border-t pt-2"><span>Total</span><span>{formatCurrency(invoice.total)}</span></div>
           </div>
         </div>
@@ -189,7 +300,7 @@ export const CompactInvoice = forwardRef(function CompactInvoice({ invoice, prof
 
 /** Traditional bilingual */
 export const TraditionalInvoice = forwardRef(function TraditionalInvoice({ invoice, profile, logo }, ref) {
-  const { shopLogo, cgst, sgst } = useInvoiceBits(invoice, profile, logo);
+  const { shopLogo, cgst, sgst, gst } = useInvoiceBits(invoice, profile, logo);
   return (
     <div ref={ref} className="bg-[#fffef8] text-slate-900 w-full max-w-[800px] mx-auto p-6 border-[3px] border-double border-slate-800" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <div className="text-center border-b-2 border-slate-800 pb-3 mb-4">
@@ -245,8 +356,12 @@ export const TraditionalInvoice = forwardRef(function TraditionalInvoice({ invoi
         <div className="border border-slate-800 p-3 space-y-1">
           <div className="flex justify-between"><span>योग / Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
           <div className="flex justify-between"><span>छूट / Discount</span><span>{formatCurrency(invoice.discount || 0)}</span></div>
-          <div className="flex justify-between"><span>CGST</span><span>{formatCurrency(cgst)}</span></div>
-          <div className="flex justify-between"><span>SGST</span><span>{formatCurrency(sgst)}</span></div>
+          {gst && (
+            <>
+              <div className="flex justify-between"><span>CGST</span><span>{formatCurrency(cgst)}</span></div>
+              <div className="flex justify-between"><span>SGST</span><span>{formatCurrency(sgst)}</span></div>
+            </>
+          )}
           <div className="flex justify-between font-bold text-sm border-t border-slate-800 pt-1 mt-1">
             <span>कुल / Total</span><span>{formatCurrency(invoice.total)}</span>
           </div>
@@ -265,7 +380,7 @@ export const TraditionalInvoice = forwardRef(function TraditionalInvoice({ invoi
 
 /** Thermal receipt */
 export const ThermalInvoice = forwardRef(function ThermalInvoice({ invoice, profile, logo }, ref) {
-  const { shopLogo } = useInvoiceBits(invoice, profile, logo);
+  const { shopLogo, gst } = useInvoiceBits(invoice, profile, logo);
   return (
     <div
       ref={ref}
@@ -296,7 +411,9 @@ export const ThermalInvoice = forwardRef(function ThermalInvoice({ invoice, prof
       </div>
       <div className="mt-2 space-y-0.5 text-[10px]">
         <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(invoice.subtotal)}</span></div>
-        <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(invoice.taxAmount)}</span></div>
+        {gst && (
+          <div className="flex justify-between"><span>Tax</span><span>{formatCurrency(invoice.taxAmount)}</span></div>
+        )}
         <div className="flex justify-between font-bold text-sm border-t border-dashed pt-1 mt-1">
           <span>TOTAL</span><span>{formatCurrency(invoice.total)}</span>
         </div>

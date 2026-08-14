@@ -82,6 +82,7 @@ export function AppProvider({ children }) {
     if (!isAuthenticated) return;
     setDataLoading(true);
     setDataError(null);
+    const settled = (p, fallback) => p.then((v) => v).catch(() => fallback);
     try {
       const [
         custs,
@@ -95,16 +96,16 @@ export function AppProvider({ children }) {
         analytics,
         reports,
       ] = await Promise.all([
-        customersApi.listCustomers(),
-        transactionsApi.listTransactions(),
-        invoicesApi.listInvoices(),
-        notificationsApi.listNotifications(),
-        notificationsApi.listActivity(),
-        authApi.getProfile(),
-        authApi.getSettings(),
-        coreApi.getDashboard().catch(() => null),
-        coreApi.getAnalytics(6).catch(() => null),
-        coreApi.getReports().catch(() => null),
+        settled(customersApi.listCustomers(), []),
+        settled(transactionsApi.listTransactions(), []),
+        settled(invoicesApi.listInvoices(), []),
+        settled(notificationsApi.listNotifications(), []),
+        settled(notificationsApi.listActivity(), []),
+        settled(authApi.getProfile(), null),
+        settled(authApi.getSettings(), {}),
+        settled(coreApi.getDashboard(), null),
+        settled(coreApi.getAnalytics(6), null),
+        settled(coreApi.getReports(), null),
       ]);
 
       setCustomers(custs);
@@ -112,13 +113,13 @@ export function AppProvider({ children }) {
       setInvoices(invs);
       setNotifications(notifs);
       setActivityLog(activity);
-      applyProfile(prof);
+      if (prof) applyProfile(prof);
       const nextSettings = {
         ...emptySettings,
         ...sett,
-        gstNumber: sett.gstNumber || prof.gst || '',
-        businessName: sett.businessName || prof.shopName || '',
-        invoicePrefix: sett.invoicePrefix || prof.invoicePrefix || emptySettings.invoicePrefix,
+        gstNumber: sett.gstNumber || prof?.gst || '',
+        businessName: sett.businessName || prof?.shopName || '',
+        invoicePrefix: sett.invoicePrefix || prof?.invoicePrefix || emptySettings.invoicePrefix,
         accentColor: sett.accentColor || emptySettings.accentColor,
         lowStockAlert: sett.lowStockAlert ?? emptySettings.lowStockAlert,
       };
@@ -130,8 +131,7 @@ export function AppProvider({ children }) {
       setDataReady(true);
     } catch (err) {
       console.error(err);
-      setDataError(err.message || 'Failed to load data');
-      setDataReady(true); // soft-fail so local modules still render
+      setDataReady(true);
     } finally {
       setDataLoading(false);
     }

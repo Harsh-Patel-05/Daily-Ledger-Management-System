@@ -19,6 +19,13 @@ class OpeningBalance(models.Model):
         on_delete=models.CASCADE,
         related_name='opening_balances',
     )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='opening_balances',
+    )
     party_type = models.CharField(max_length=20, choices=PartyType.choices)
     party_name = models.CharField(max_length=200)
     customer = models.ForeignKey(

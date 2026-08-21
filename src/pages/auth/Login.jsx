@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -26,11 +27,11 @@ export default function Login() {
 
     setLoading(true);
     try {
-      await login(email, password);
-      toast.success('Welcome back!');
+      const res = await login(email, password);
+      toast.success(getApiMessage(res, 'Login successful'));
       navigate('/dashboard');
     } catch (err) {
-      toast.error(err.message || 'Login failed');
+      toast.error(getApiErrorMessage(err, 'Login failed'));
     } finally {
       setLoading(false);
     }

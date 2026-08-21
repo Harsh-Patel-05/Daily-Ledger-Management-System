@@ -8,9 +8,10 @@ import { useToast } from '../../context/ToastContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { filterBySearch } from '../../utils/helpers';
 import PageHeader from '../../components/pages/PageHeader';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Card, SearchBox, Table, Pagination, Button, Input, Dropdown, Modal,
-  EmptyState, FloatingAddButton, ConfirmationDialog,
+  EmptyState, ConfirmationDialog,
 } from '../../components/ui';
 
 export default function SalesReturns() {
@@ -61,14 +62,14 @@ export default function SalesReturns() {
     setSaving(true);
     try {
       // Backend SalesReturn create also writes Transaction type=return
-      await salesReturns.add({
+      const __apiRes = await salesReturns.add({
         ...form,
         amount,
         customerName: customer?.name || '',
         invoiceNo: invoice?.invoiceNumber || '',
         gstApplicable: form.gstApplicable === 'yes',
       });
-      toast.success('Sales return recorded · customer balance updated');
+      toast.success(getApiMessage(__apiRes, 'Sales return recorded · customer balance updated'));
       setOpen(false);
       setForm({
         date: new Date().toISOString().slice(0, 10),
@@ -79,7 +80,7 @@ export default function SalesReturns() {
         gstApplicable: 'yes',
       });
     } catch (err) {
-      toast.error(err.message || 'Could not save return');
+      toast.error(getApiErrorMessage(err, 'Could not save return'));
     } finally {
       setSaving(false);
     }
@@ -124,7 +125,6 @@ export default function SalesReturns() {
           </>
         )}
       </Card>
-      <FloatingAddButton onClick={() => setOpen(true)} />
 
       <Modal open={open} onClose={() => setOpen(false)} title="Add Sales Return">
         <form onSubmit={handleSubmit} className="space-y-3">
@@ -163,9 +163,17 @@ export default function SalesReturns() {
       <ConfirmationDialog
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onConfirm={() => { salesReturns.remove(deleteId); setDeleteId(null); toast.success('Deleted'); }}
+        onConfirm={async () => {
+          try {
+            await salesReturns.remove(deleteId);
+            setDeleteId(null);
+            toast.success('Deleted');
+          } catch (err) {
+            toast.error(getApiErrorMessage(err, 'Delete failed'));
+          }
+        }}
         title="Delete return?"
-        message="Remove this sales return."
+        message="This will permanently delete the sales return on the server."
       />
     </div>
   );

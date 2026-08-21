@@ -315,8 +315,8 @@ class ShopRoleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ShopRole
-        fields = ('id', 'name', 'description', 'users', 'created_at')
-        read_only_fields = ('id', 'created_at')
+        fields = ('id', 'name', 'description', 'is_system', 'users', 'created_at')
+        read_only_fields = ('id', 'is_system', 'created_at')
 
     def get_users(self, obj):
         owner = obj.owner

@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from accounts.ownership import data_owner
+from companies.company_scope import scope_queryset, assign_owner_company, get_active_company
 from .models import Invoice, SalesReturn
 from .serializers import InvoiceSerializer, SalesReturnSerializer
 from notifications.models import ActivityLog
@@ -36,9 +37,10 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return Invoice.objects.filter(
-            owner=data_owner(self.request.user)
-        ).prefetch_related('items').select_related('customer')
+        return scope_queryset(
+            Invoice.objects.prefetch_related('items').select_related('customer').all(),
+            self.request,
+        )
 
     def get_object(self):
         lookup = self.kwargs.get(self.lookup_field)
@@ -50,14 +52,14 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        invoice = serializer.save()
+        kwargs = assign_owner_company(self.request)
+        invoice = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='invoice',
             message=f'Invoice created: {invoice.invoice_number}',
         )
-        notify_invoice_created(owner, invoice)
+        notify_invoice_created(kwargs['owner'], invoice)
 
     def perform_destroy(self, instance):
         from transactions.models import Transaction
@@ -93,6 +95,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         from .models import InvoiceItem
 
         owner = data_owner(request.user)
+        company = get_active_company(request, required=True)
         prefix = 'INV'
         try:
             prefix = request.user.business.invoice_prefix or 'INV'
@@ -101,6 +104,7 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         clone = Invoice.objects.create(
             owner=owner,
+            company=company or original.company,
             customer=original.customer,
             invoice_number=Invoice.next_number(owner, prefix),
             date=date.today(),
@@ -151,8 +155,9 @@ class InvoiceViewSet(viewsets.ModelViewSet):
             method = 'Cash'
 
         if remaining > 0:
+            tx_kwargs = assign_owner_company(request)
             Transaction.objects.create(
-                owner=owner,
+                **tx_kwargs,
                 customer=invoice.customer,
                 date=date_cls.today(),
                 type=Transaction.Type.PAYMENT,
@@ -179,6 +184,49 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
         return Response(InvoiceSerializer(invoice, context={'request': request}).data)
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Invoice created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Invoice updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Invoice deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class SalesReturnViewSet(viewsets.ModelViewSet):
     serializer_class = SalesReturnSerializer
@@ -188,15 +236,16 @@ class SalesReturnViewSet(viewsets.ModelViewSet):
     http_method_names = ['get', 'post', 'head', 'options', 'delete']
 
     def get_queryset(self):
-        return SalesReturn.objects.filter(
-            owner=data_owner(self.request.user)
-        ).select_related('customer', 'invoice')
+        return scope_queryset(
+            SalesReturn.objects.select_related('customer', 'invoice').all(),
+            self.request,
+        )
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        sales_return = serializer.save()
+        kwargs = assign_owner_company(self.request)
+        sales_return = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='return',
             message=f'Sales return: {sales_return.customer.name} · ₹{sales_return.amount}',
         )
@@ -228,4 +277,47 @@ class SalesReturnViewSet(viewsets.ModelViewSet):
             owner=owner,
             type='return',
             message=f'Sales return deleted: {name} · ₹{amount}',
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Sales return created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Sales return updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Sales return deleted successfully',
+            },
+            status=status.HTTP_200_OK,
         )

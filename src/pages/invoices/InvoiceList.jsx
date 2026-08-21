@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaPlus, FaUpload, FaEye, FaTrash, FaDownload } from 'react-icons/fa';
+import { FaPlus, FaUpload, FaEye, FaTrash } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
@@ -10,9 +10,10 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 import { filterBySearch } from '../../utils/helpers';
 import {
   Breadcrumbs, Card, SearchBox, Filter, Table, Pagination,
-  Button, Badge, ConfirmationDialog, FloatingAddButton, EmptyState, ExportButton,
+  Button, Badge, ConfirmationDialog, EmptyState, ExportButton,
 } from '../../components/ui';
 import { exportToCsv, invoicesToCsvRows } from '../../utils/exportCsv';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function InvoiceList() {
   const { invoices, deleteInvoice } = useApp();
@@ -141,7 +142,7 @@ export default function InvoiceList() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {[
           {
             title: 'Quick Invoice',
@@ -156,13 +157,6 @@ export default function InvoiceList() {
             to: '/invoices/upload',
             icon: FaUpload,
             color: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30',
-          },
-          {
-            title: 'Full Create Form',
-            desc: 'Multi-item GST or Non-GST invoice with logo, bank details & PDF.',
-            to: '/invoices/create',
-            icon: FaDownload,
-            color: 'bg-amber-50 text-amber-600 dark:bg-amber-900/30',
           },
         ].map((card) => (
           card.to ? (
@@ -235,8 +229,6 @@ export default function InvoiceList() {
         )}
       </Card>
 
-      <FloatingAddButton to="/invoices/create" label="Create Invoice" />
-
       <ConfirmationDialog
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
@@ -246,7 +238,7 @@ export default function InvoiceList() {
             setDeleteId(null);
             toast.success('Invoice deleted');
           } catch (err) {
-            toast.error(err.message || 'Delete failed');
+            toast.error(getApiErrorMessage(err, 'Delete failed'));
           }
         }}
         title="Delete Invoice"

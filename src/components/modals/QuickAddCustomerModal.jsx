@@ -6,6 +6,7 @@ import { useModal } from '../../context/ModalContext';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function QuickAddCustomerModal() {
   const { current, closeModal } = useModal();
@@ -51,7 +52,7 @@ export default function QuickAddCustomerModal() {
       if (current.payload?.goToProfile) navigate(`/customers/${customer.id}`);
       current.payload?.onCreated?.(customer);
     } catch (err) {
-      toast.error(err.message || 'Failed to add customer');
+      toast.error(getApiErrorMessage(err, 'Failed to add customer'));
     } finally {
       setLoading(false);
     }

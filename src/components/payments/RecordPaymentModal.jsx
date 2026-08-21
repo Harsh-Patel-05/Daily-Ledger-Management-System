@@ -8,6 +8,7 @@ import Input from '../ui/Input';
 import Dropdown from '../ui/Dropdown';
 import DatePicker from '../ui/DatePicker';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function RecordPaymentModal({
   open,
@@ -91,7 +92,7 @@ export default function RecordPaymentModal({
       toast.success(`Payment of ${formatCurrency(Number(amount))} recorded`);
       onClose();
     } catch (err) {
-      toast.error(err.message || 'Payment failed');
+      toast.error(getApiErrorMessage(err, 'Payment failed'));
     } finally {
       setLoading(false);
     }

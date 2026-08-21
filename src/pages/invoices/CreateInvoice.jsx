@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaPlus, FaTrash } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useInventory } from '../../context/InventoryContext';
+import { useCompanies } from '../../context/CompaniesContext';
 import { useToast } from '../../context/ToastContext';
-import { calcInvoiceTotals } from '../../utils/invoiceUtils';
+import { calcInvoiceTotals, inferDestination } from '../../utils/invoiceUtils';
 import {
   applyProductToLine,
   stockIssuesForItems,
@@ -12,6 +13,7 @@ import {
 import { nextInvoiceNumber as fetchNextInvoiceNumber } from '../../api/invoices';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 import { Breadcrumbs, Card, CardHeader, Input, Dropdown, DatePicker, Button } from '../../components/ui';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const DEFAULT_INVOICE_FORMAT = 'classic';
 
@@ -28,6 +30,7 @@ const emptyItem = () => ({
 export default function CreateInvoice() {
   const { customers, settings, profile, addInvoice } = useApp();
   const { products, getProduct } = useInventory();
+  const { isGstEnabled } = useCompanies();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -47,13 +50,37 @@ export default function CreateInvoice() {
     taxRate: settings.defaultTaxRate || 18,
     paidAmount: 0,
     paymentMethod: 'Credit',
-    gstType: settings.defaultGstMode === 'non_gst' ? 'Non-GST' : 'GST',
-    notes: 'Thank you for your business!',
-    terms: 'Payment due within 15 days. Goods once sold will not be taken back.',
+    paymentTerms: '',
+    gstType: 'GST',
+    notes: '',
+    terms: '',
+    deliveryNote: '',
+    referenceNo: '',
+    otherReferences: '',
+    buyerOrderNo: '',
+    buyerOrderDate: '',
+    dispatchDocNo: '',
+    deliveryNoteDate: '',
+    dispatchedThrough: '',
+    destination: '',
+    termsOfDelivery: '',
     format: DEFAULT_INVOICE_FORMAT,
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isGstEnabled) {
+      setForm((f) => ({
+        ...f,
+        gstType: 'Non-GST',
+        taxRate: 0,
+        items: (f.items || []).map((it) => ({ ...it, hsn: it.hsn || '' })),
+      }));
+    } else if (settings.defaultGstMode === 'non_gst') {
+      setForm((f) => ({ ...f, gstType: 'Non-GST', taxRate: 0 }));
+    }
+  }, [isGstEnabled, settings.defaultGstMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,6 +100,18 @@ export default function CreateInvoice() {
       });
     return () => { cancelled = true; };
   }, [prefix]);
+
+  // When customer changes, fill destination / payment terms from party master
+  useEffect(() => {
+    if (!form.customerId) return;
+    const c = customers.find((x) => String(x.id) === String(form.customerId));
+    if (!c) return;
+    setForm((f) => ({
+      ...f,
+      destination: f.destination || inferDestination(c.address || c.shippingAddress || '', '', c.state || ''),
+      paymentTerms: f.paymentTerms || (c.creditDays ? `${c.creditDays} Days` : f.paymentMethod || ''),
+    }));
+  }, [form.customerId, customers]);
 
   const gstSale = form.gstType === 'GST';
   const effectiveTaxRate = gstSale ? form.taxRate : 0;
@@ -148,7 +187,7 @@ export default function CreateInvoice() {
       toast.success('Invoice created successfully');
       navigate(`/invoices/${invoice.id}`);
     } catch (err) {
-      toast.error(err.message || 'Failed to create invoice');
+      toast.error(getApiErrorMessage(err, 'Failed to create invoice'));
     } finally {
       setLoading(false);
     }
@@ -197,25 +236,51 @@ export default function CreateInvoice() {
               error={errors.customerId}
               required
             />
-            <Dropdown
-              label="Invoice Type"
-              value={form.gstType}
-              onChange={(v) => setForm({
-                ...form,
-                gstType: v,
-                taxRate: v === 'Non-GST' ? 0 : (form.taxRate || settings.defaultTaxRate || 18),
-              })}
-              options={[
-                { value: 'GST', label: 'GST (Tax Invoice)' },
-                { value: 'Non-GST', label: 'Non-GST (Bill / Invoice)' },
-              ]}
-            />
+            {isGstEnabled ? (
+              <Dropdown
+                label="Invoice Type"
+                value={form.gstType}
+                onChange={(v) => setForm({
+                  ...form,
+                  gstType: v,
+                  taxRate: v === 'Non-GST' ? 0 : (form.taxRate || settings.defaultTaxRate || 18),
+                })}
+                options={[
+                  { value: 'GST', label: 'GST (Tax Invoice)' },
+                  { value: 'Non-GST', label: 'Non-GST (Bill / Invoice)' },
+                ]}
+              />
+            ) : (
+              <Input label="Invoice Type" value="Non-GST (this company)" disabled />
+            )}
             <Dropdown
               label="Payment Method"
               value={form.paymentMethod}
-              onChange={(v) => setForm({ ...form, paymentMethod: v })}
+              onChange={(v) => setForm({ ...form, paymentMethod: v, paymentTerms: form.paymentTerms || v })}
               options={['Credit', 'Cash', 'UPI', 'Bank', 'Cheque'].map((m) => ({ value: m, label: m }))}
             />
+            <Input
+              label="Mode / Terms of Payment"
+              value={form.paymentTerms}
+              onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })}
+              placeholder="e.g. 15 Days / Credit"
+            />
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Dispatch / Reference (shows on tax invoice)" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label="Delivery Note" value={form.deliveryNote} onChange={(e) => setForm({ ...form, deliveryNote: e.target.value })} />
+            <Input label="Reference No. & Date" value={form.referenceNo} onChange={(e) => setForm({ ...form, referenceNo: e.target.value })} />
+            <Input label="Other References" value={form.otherReferences} onChange={(e) => setForm({ ...form, otherReferences: e.target.value })} />
+            <Input label="Buyer’s Order No." value={form.buyerOrderNo} onChange={(e) => setForm({ ...form, buyerOrderNo: e.target.value })} />
+            <DatePicker label="Buyer’s Order Date" value={form.buyerOrderDate} onChange={(v) => setForm({ ...form, buyerOrderDate: v })} />
+            <Input label="Dispatch Doc No." value={form.dispatchDocNo} onChange={(e) => setForm({ ...form, dispatchDocNo: e.target.value })} />
+            <DatePicker label="Delivery Note Date" value={form.deliveryNoteDate} onChange={(v) => setForm({ ...form, deliveryNoteDate: v })} />
+            <Input label="Dispatched through" value={form.dispatchedThrough} onChange={(e) => setForm({ ...form, dispatchedThrough: e.target.value })} />
+            <Input label="Destination" value={form.destination} onChange={(e) => setForm({ ...form, destination: e.target.value })} placeholder="City / place" />
+            <Input label="Terms of Delivery" value={form.termsOfDelivery} onChange={(e) => setForm({ ...form, termsOfDelivery: e.target.value })} />
           </div>
         </Card>
 

@@ -4,6 +4,7 @@ import { FaArrowLeft } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function OTPVerification() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -15,7 +16,6 @@ export default function OTPVerification() {
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email || '';
-  const demoOtp = location.state?.demoOtp;
 
   useEffect(() => {
     if (timer <= 0) return;
@@ -61,11 +61,11 @@ export default function OTPVerification() {
     setLoading(true);
     try {
       const code = otp.join('');
-      await verifyOtp(email, code);
-      toast.success('OTP verified successfully');
+      const res = await verifyOtp(email, code);
+      toast.success(getApiMessage(res, 'OTP verified'));
       navigate('/reset-password', { state: { email, otp: code } });
     } catch (err) {
-      toast.error(err.message || 'Invalid OTP');
+      toast.error(getApiErrorMessage(err, 'Invalid OTP'));
     } finally {
       setLoading(false);
     }
@@ -80,9 +80,6 @@ export default function OTPVerification() {
       <p className="text-sm text-muted mb-8">
         Enter the 6-digit code sent to{' '}
         <span className="font-medium text-slate-700 dark:text-slate-200">{email || 'your email'}</span>
-        {demoOtp ? (
-          <span className="block mt-2 text-xs text-amber-600">Dev OTP: <strong>{demoOtp}</strong></span>
-        ) : null}
       </p>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -114,12 +111,11 @@ export default function OTPVerification() {
               type="button"
               onClick={async () => {
                 try {
-                  const res = await forgotPassword(email);
+                  await forgotPassword(email);
                   setTimer(60);
-                  if (res.otp_demo) toast.info(`OTP resent: ${res.otp_demo}`);
-                  else toast.info('OTP resent');
+                  toast.info('OTP resent to your email');
                 } catch (err) {
-                  toast.error(err.message || 'Failed to resend');
+                  toast.error(getApiErrorMessage(err, 'Failed to resend'));
                 }
               }}
               className="text-primary font-medium hover:underline"

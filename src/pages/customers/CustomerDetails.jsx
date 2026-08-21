@@ -14,6 +14,7 @@ import {
 import RecordPaymentModal from '../../components/payments/RecordPaymentModal';
 import { formatCurrency, formatPhone, formatDate } from '../../utils/formatters';
 import { getStatusColor, TRANSACTION_TYPES } from '../../utils/helpers';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function CustomerDetails() {
   const { id } = useParams();
@@ -38,11 +39,11 @@ export default function CustomerDetails() {
 
   const handleDelete = async () => {
     try {
-      await deleteCustomer(id);
-      toast.success('Customer deleted');
+      const __apiRes = await deleteCustomer(id);
+      toast.success(getApiMessage(__apiRes, 'Customer deleted'));
       navigate('/customers');
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
     }
   };
 

@@ -14,6 +14,7 @@ import {
 } from '../../utils/reminderChannels';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const CHANNELS = [
   {
@@ -140,7 +141,7 @@ export default function SendReminderModal() {
       syncAndRefreshNotifications?.().catch(() => {});
       closeModal();
     } catch (err) {
-      toast.error(err.message || 'Failed to send reminder');
+      toast.error(getApiErrorMessage(err, 'Failed to send reminder'));
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext';
 import { useDebounce } from '../../hooks/useDebounce';
 import { formatPhone } from '../../utils/formatters';
 import { filterBySearch } from '../../utils/helpers';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Breadcrumbs, Card, SearchBox, Button, Input, Modal,
   ConfirmationDialog, EmptyState, Table,
@@ -69,7 +70,7 @@ export default function Suppliers() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = {};
-    if (!form.name.trim()) errs.name = 'Supplier name is required';
+    if (!form.name.trim()) errs.name = 'Vendor name is required';
     if (form.mobile && !/^\d{10}$/.test(form.mobile)) errs.mobile = 'Enter 10-digit mobile';
     setErrors(errs);
     if (Object.keys(errs).length) return;
@@ -77,15 +78,15 @@ export default function Suppliers() {
     setLoading(true);
     try {
       if (editing) {
-        await updateSupplier(editing.id, form);
-        toast.success('Supplier updated');
+        const __apiRes = await updateSupplier(editing.id, form);
+        toast.success(getApiMessage(__apiRes, 'Vendor updated'));
       } else {
-        await addSupplier(form);
-        toast.success('Supplier added');
+        const __apiRes = await addSupplier(form);
+        toast.success(getApiMessage(__apiRes, 'Vendor added'));
       }
       setOpen(false);
     } catch (err) {
-      toast.error(err.message || 'Failed to save');
+      toast.error(getApiErrorMessage(err, 'Failed to save'));
     } finally {
       setLoading(false);
     }
@@ -95,16 +96,16 @@ export default function Suppliers() {
     try {
       await deleteSupplier(deleteId);
       setDeleteId(null);
-      toast.success('Supplier deleted');
+      toast.success('Vendor deleted');
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
     }
   };
 
   const columns = [
     {
       key: 'name',
-      label: 'Supplier',
+      label: 'Vendor',
       render: (_, row) => (
         <div>
           <p className="font-medium text-slate-800 dark:text-slate-100">{row.name}</p>
@@ -165,8 +166,8 @@ export default function Suppliers() {
   return (
     <div className="space-y-4">
       <Breadcrumbs items={[
-        { label: 'Parties', to: '/parties/customers' },
-        { label: 'Suppliers' },
+        { label: 'Party Master', to: '/parties/customers' },
+        { label: 'Vendors' },
       ]} />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -175,11 +176,11 @@ export default function Suppliers() {
             <FaArrowLeft size={14} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Suppliers</h1>
-            <p className="text-sm text-muted mt-0.5">{suppliers.length} suppliers</p>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Vendors</h1>
+            <p className="text-sm text-muted mt-0.5">{suppliers.length} vendors</p>
           </div>
         </div>
-        <Button onClick={openCreate}><FaPlus size={12} /> Add Supplier</Button>
+        <Button onClick={openCreate}><FaPlus size={12} /> Add Vendor</Button>
       </div>
 
       <Card>
@@ -194,9 +195,9 @@ export default function Suppliers() {
         {filtered.length === 0 ? (
           <EmptyState
             type="inventory"
-            title="No suppliers found"
-            description="Add suppliers to track purchase sources."
-            actionLabel="Add Supplier"
+            title="No vendors found"
+            description="Add vendors to track purchase sources."
+            actionLabel="Add Vendor"
             onAction={openCreate}
           />
         ) : (
@@ -204,10 +205,10 @@ export default function Suppliers() {
         )}
       </Card>
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Supplier' : 'Add Supplier'} size="md">
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Edit Vendor' : 'Add Vendor'} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input label="Supplier Name" value={form.name} onChange={set('name')} error={errors.name} required />
+            <Input label="Vendor Name" value={form.name} onChange={set('name')} error={errors.name} required />
             <Input label="Contact Person" value={form.contactPerson} onChange={set('contactPerson')} />
             <Input label="Mobile" value={form.mobile} onChange={set('mobile')} error={errors.mobile} placeholder="10-digit" />
             <Input label="Email" type="email" value={form.email} onChange={set('email')} />
@@ -235,8 +236,8 @@ export default function Suppliers() {
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={handleDelete}
-        title="Delete Supplier"
-        message="Products linked to this supplier will be unassigned."
+        title="Delete Vendor"
+        message="Products linked to this vendor will be unassigned."
         confirmText="Delete"
       />
     </div>

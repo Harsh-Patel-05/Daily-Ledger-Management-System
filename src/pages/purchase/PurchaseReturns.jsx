@@ -19,10 +19,9 @@ export default function PurchaseReturns() {
   return (
     <CrudListPage
       title="Purchase Returns"
-      subtitle="Return reduces supplier payable on matching bill"
+      subtitle="Return reduces vendor payable on matching bill"
       breadcrumbs={[{ label: 'Purchase', to: '/purchase/bills' }, { label: 'Purchase Returns' }]}
       externalCollection={purchaseReturns}
-      storageKey="__purchase_returns_ui"
       onCreate={(payload) => {
         const bill = purchaseBills.items.find((b) => b.billNo === payload.billNo);
         // API createReturn updates bill balance; collection reloads returns + bills
@@ -38,7 +37,7 @@ export default function PurchaseReturns() {
         { key: 'date', label: 'Date', type: 'date', required: true, defaultValue: new Date().toISOString().slice(0, 10) },
         {
           key: 'supplierName',
-          label: 'Supplier',
+          label: 'Vendor',
           type: 'select',
           options: supplierOptions,
           required: true,
@@ -59,14 +58,14 @@ export default function PurchaseReturns() {
       ]}
       columns={[
         { key: 'date', label: 'Date', render: (v) => formatDate(v) },
-        { key: 'supplierName', label: 'Supplier' },
+        { key: 'supplierName', label: 'Vendor' },
         { key: 'billNo', label: 'Bill No', render: (v) => v || '—' },
         { key: 'gstType', label: 'Type' },
         { key: 'amount', label: 'Amount', render: (v) => formatCurrency(v) },
         { key: 'reason', label: 'Reason', render: (v) => v || '—' },
       ]}
       emptyTitle="No purchase returns"
-      emptyDescription="Record goods returned to suppliers."
+      emptyDescription="Record goods returned to vendors."
     />
   );
 }

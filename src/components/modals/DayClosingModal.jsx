@@ -7,6 +7,7 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 import { PAYMENT_METHODS } from '../../utils/helpers';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 function todayISO() {
   return new Date().toISOString().split('T')[0];
@@ -56,16 +57,16 @@ export default function DayClosingModal() {
   const handleCloseDay = async () => {
     setSaving(true);
     try {
-      await closeDay({
+      const __apiRes = await closeDay({
         date: summary.today,
         message:
           `Day closing ${summary.today} · Collection ${formatCurrency(summary.byType.payment)} · ` +
           `Credit ${formatCurrency(summary.byType.credit)} · Expense ${formatCurrency(summary.byType.expense)}`,
       });
-      toast.success('Day closing saved on server');
+      toast.success(getApiMessage(__apiRes, 'Day closing saved on server'));
       closeModal();
     } catch (err) {
-      toast.error(err.message || 'Could not save day closing');
+      toast.error(getApiErrorMessage(err, 'Could not save day closing'));
     } finally {
       setSaving(false);
     }

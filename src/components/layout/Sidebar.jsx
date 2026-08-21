@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -19,10 +19,26 @@ import {
   FaPercentage,
   FaUserShield,
   FaChevronDown,
+  FaBuilding,
+  FaSitemap,
+  FaWhatsapp,
+  FaComments,
+  FaDownload,
 } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
+import { useCompanies } from '../../context/CompaniesContext';
 import { cn } from '../../utils/formatters';
-import { menuConfig, accountLinks, getActiveNav, sectionIsActive, childIsActive } from '../../navigation/menuConfig';
+import {
+  menuConfig,
+  accountLinks,
+  filterMenuConfig,
+  getActiveNav,
+  childIsActive,
+} from '../../navigation/menuConfig';
+import { navChildTourId } from '../../data/tourSteps';
+import LiveChatModal from '../modals/LiveChatModal';
+import DesktopAppModal from '../modals/DesktopAppModal';
+import { whatsappSupportUrl } from '../../config/support';
 
 const ICONS = {
   FaTachometerAlt,
@@ -39,7 +55,36 @@ const ICONS = {
   FaReceipt,
   FaPercentage,
   FaUserShield,
+  FaBuilding,
+  FaSitemap,
 };
+
+const footItemClass =
+  'w-full flex items-center gap-2 rounded-xl px-3 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-300 transition-colors cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 hover:text-slate-800 dark:hover:text-slate-100';
+
+function SidebarFootItem({ icon, label, extra, onClick, href, target, rel }) {
+  const content = (
+    <>
+      <span className="shrink-0 w-4 flex justify-center">{icon}</span>
+      <span className="flex-1 truncate text-left">{label}</span>
+      {extra && <span className="text-[10px] font-semibold text-emerald-600 shrink-0">{extra}</span>}
+    </>
+  );
+
+  if (href) {
+    return (
+      <a href={href} target={target} rel={rel} onClick={onClick} className={footItemClass}>
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className={footItemClass}>
+      {content}
+    </button>
+  );
+}
 
 function getInitialOpenSections(pathname) {
   const { section } = getActiveNav(pathname);
@@ -48,8 +93,15 @@ function getInitialOpenSections(pathname) {
 
 export default function Sidebar() {
   const { sidebarOpen, setSidebarOpen, sidebarCollapsed, unreadCount, profile } = useApp();
+  const { isGstEnabled } = useCompanies();
   const location = useLocation();
-  const { section: activeSection, child: activeChild } = getActiveNav(location.pathname);
+  const [liveChatOpen, setLiveChatOpen] = useState(false);
+  const [desktopAppOpen, setDesktopAppOpen] = useState(false);
+  const navMenu = useMemo(
+    () => filterMenuConfig(menuConfig, isGstEnabled),
+    [isGstEnabled]
+  );
+  const { section: activeSection, child: activeChild } = getActiveNav(location.pathname, navMenu);
   const [openSections, setOpenSections] = useState(() => getInitialOpenSections(location.pathname));
 
   const desktopNavRef = useRef(null);
@@ -57,11 +109,7 @@ export default function Sidebar() {
   const scrollPosRef = useRef(0);
 
   const shopLabel = profile?.shopName || profile?.businessName || 'Your Shop';
-  const locationLabel = profile?.address
-    ? profile.address.split(',').slice(-2).join(',').trim() || profile.address
-    : 'Update profile details';
 
-  // Accordion: keep the active module section open
   useEffect(() => {
     const activeId = activeSection?.id && activeSection.id !== 'account' && activeSection.children
       ? activeSection.id
@@ -78,7 +126,6 @@ export default function Sidebar() {
     });
   }, [location.pathname, activeSection?.id]);
 
-  // Product tour can force-open a section while highlighting it
   useEffect(() => {
     const onTourExpand = (e) => {
       const id = e.detail?.sectionId;
@@ -94,10 +141,7 @@ export default function Sidebar() {
     containers.forEach((nav) => {
       const activeEl = nav.querySelector('[data-nav-active="true"]');
       if (!activeEl) {
-        // Fallback: restore previous scroll if no active marker yet
-        if (scrollPosRef.current > 0) {
-          nav.scrollTop = scrollPosRef.current;
-        }
+        if (scrollPosRef.current > 0) nav.scrollTop = scrollPosRef.current;
         return;
       }
       const navRect = nav.getBoundingClientRect();
@@ -108,7 +152,6 @@ export default function Sidebar() {
       if (above || below) {
         activeEl.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
       }
-      // Persist after layout settles
       requestAnimationFrame(() => {
         scrollPosRef.current = nav.scrollTop;
       });
@@ -116,10 +159,7 @@ export default function Sidebar() {
   }, []);
 
   useEffect(() => {
-    // Wait for section expand animation / paint, then pin to active item
-    const t1 = requestAnimationFrame(() => {
-      restoreScrollToActive();
-    });
+    const t1 = requestAnimationFrame(() => restoreScrollToActive());
     const t2 = setTimeout(restoreScrollToActive, 220);
     return () => {
       cancelAnimationFrame(t1);
@@ -133,7 +173,6 @@ export default function Sidebar() {
 
   const toggleSection = (id) => {
     setOpenSections((prev) => {
-      // Clicking open section closes it; opening another closes the rest
       if (prev[id]) return {};
       return { [id]: true };
     });
@@ -156,30 +195,42 @@ export default function Sidebar() {
         : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-800/60'
     );
 
-  const renderNav = (collapsed, navRef) => (
+  const renderNav = (collapsed) => (
     <>
-      {menuConfig.map((item) => {
+      {navMenu.map((item, index) => {
         const Icon = ICONS[item.icon] || FaCog;
-        const active = sectionIsActive(item, location.pathname);
+        const active = activeSection?.id === item.id;
+        const showGroup =
+          !collapsed &&
+          item.group &&
+          (index === 0 || navMenu[index - 1].group !== item.group);
+
+        const groupHeader = showGroup ? (
+          <p className="px-3 pt-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+            {item.group}
+          </p>
+        ) : null;
 
         if (!item.children) {
           return (
-            <NavLink
-              key={item.id}
-              to={item.to}
-              end
-              data-tour={`nav-${item.id}`}
-              data-nav-active={active ? 'true' : undefined}
-              onClick={() => {
-                setOpenSections({});
-                setSidebarOpen(false);
-              }}
-              className={linkClass(active, collapsed)}
-              title={collapsed ? item.label : undefined}
-            >
-              <Icon size={16} className="shrink-0" />
-              {!collapsed && <span className="flex-1">{item.label}</span>}
-            </NavLink>
+            <div key={item.id}>
+              {groupHeader}
+              <NavLink
+                to={item.to}
+                end
+                data-tour={`nav-${item.id}`}
+                data-nav-active={active ? 'true' : undefined}
+                onClick={() => {
+                  setOpenSections({});
+                  setSidebarOpen(false);
+                }}
+                className={linkClass(active, collapsed)}
+                title={collapsed ? item.label : undefined}
+              >
+                <Icon size={16} className="shrink-0" />
+                {!collapsed && <span className="flex-1">{item.label}</span>}
+              </NavLink>
+            </div>
           );
         }
 
@@ -203,6 +254,7 @@ export default function Sidebar() {
 
         return (
           <div key={item.id}>
+            {groupHeader}
             <button
               type="button"
               onClick={() => toggleSection(item.id)}
@@ -240,6 +292,7 @@ export default function Sidebar() {
                           key={child.to}
                           to={child.to}
                           end={['/gst', '/expenses', '/users'].includes(child.to)}
+                          data-tour={navChildTourId(item.id, child.to)}
                           data-nav-active={exactish ? 'true' : undefined}
                           onClick={() => setSidebarOpen(false)}
                           className={childLinkClass(exactish)}
@@ -266,10 +319,12 @@ export default function Sidebar() {
       {accountLinks.map((item) => {
         const Icon = ICONS[item.icon] || FaUser;
         const active = location.pathname.startsWith(item.to);
+        const accountTourId = `nav-account-${item.to.replace(/^\//, '')}`;
         return (
           <NavLink
             key={item.to}
             to={item.to}
+            data-tour={accountTourId}
             data-nav-active={active ? 'true' : undefined}
             onClick={() => {
               setOpenSections({});
@@ -314,7 +369,7 @@ export default function Sidebar() {
         {!collapsed && (
           <div className="min-w-0">
             <h1 className="text-sm font-bold text-slate-800 dark:text-white truncate">{shopLabel}</h1>
-            <p className="text-[10px] text-muted truncate">Daily Ledger</p>
+            <p className="text-[10px] text-muted truncate">Accounting</p>
           </div>
         )}
       </div>
@@ -324,15 +379,66 @@ export default function Sidebar() {
         onScroll={onNavScroll}
         className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin py-3 px-3 space-y-1"
       >
-        {renderNav(collapsed, navRef)}
+        {renderNav(collapsed)}
       </nav>
 
       {!collapsed && (
-        <div className="shrink-0 px-4 py-4 border-t border-border/60 dark:border-slate-700">
-          <div className="bg-gradient-to-br from-primary/5 to-secondary/5 dark:from-primary/10 dark:to-secondary/10 rounded-xl p-3">
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">{shopLabel}</p>
-            <p className="text-[10px] text-muted mt-0.5 truncate">{locationLabel}</p>
-          </div>
+        <div className="shrink-0 px-3 py-3 border-t border-border/60 dark:border-slate-700 space-y-0.5 relative z-10">
+          <SidebarFootItem
+            icon={<FaComments className="text-emerald-500" size={14} />}
+            label="Live chat"
+            extra="Online"
+            onClick={() => {
+              setSidebarOpen(false);
+              setLiveChatOpen(true);
+            }}
+          />
+          <SidebarFootItem
+            icon={<FaWhatsapp className="text-emerald-600" size={14} />}
+            label="WhatsApp"
+            href={whatsappSupportUrl('Hi, I need help with Daily Ledger.')}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <NavLink
+            to="/gst"
+            onClick={() => setSidebarOpen(false)}
+            className={({ isActive }) =>
+              cn(
+                footItemClass,
+                isActive && 'bg-primary/10 text-primary dark:bg-primary/15'
+              )
+            }
+          >
+            <span className="shrink-0 w-4 flex justify-center">
+              <FaPercentage size={12} className="text-primary" />
+            </span>
+            <span className="flex-1 truncate text-left">Try GST Filing</span>
+          </NavLink>
+          <SidebarFootItem
+            icon={<FaDownload className="text-slate-400" size={14} />}
+            label="Download Desktop App"
+            onClick={() => {
+              setSidebarOpen(false);
+              setDesktopAppOpen(true);
+            }}
+          />
+          <NavLink
+            to="/settings/business"
+            onClick={() => setSidebarOpen(false)}
+            className={({ isActive }) =>
+              cn(
+                footItemClass,
+                isActive && 'bg-primary/10 text-primary dark:bg-primary/15'
+              )
+            }
+          >
+            <span className="shrink-0 w-4 flex justify-center">
+              <FaCog size={12} className="text-slate-400" />
+            </span>
+            <span className="flex-1 truncate text-left">Settings</span>
+          </NavLink>
         </div>
       )}
     </div>
@@ -378,6 +484,9 @@ export default function Sidebar() {
           </>
         )}
       </AnimatePresence>
+
+      <LiveChatModal open={liveChatOpen} onClose={() => setLiveChatOpen(false)} />
+      <DesktopAppModal open={desktopAppOpen} onClose={() => setDesktopAppOpen(false)} />
     </>
   );
 }

@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
 import AuthLayout from '../layouts/AuthLayout';
 import AppLayout from '../layouts/AppLayout';
+import GstModeGuard from '../components/GstModeGuard';
 
 import Login from '../pages/auth/Login';
 import SignUp from '../pages/auth/SignUp';
@@ -10,6 +11,19 @@ import OTPVerification from '../pages/auth/OTPVerification';
 import ResetPassword from '../pages/auth/ResetPassword';
 
 import Dashboard from '../pages/Dashboard';
+import CompanyList from '../pages/companies/CompanyList';
+import CreateCompany from '../pages/companies/CreateCompany';
+import CompanyDetails from '../pages/companies/CompanyDetails';
+import EditCompany from '../pages/companies/EditCompany';
+import ChartsOfAccount from '../pages/accounts/ChartsOfAccount';
+import {
+  AccountListPage, QuotationsPage, ProformaPage, SalesOrdersPage, DeliveryChallansPage,
+  CreditNotesPage, PurchaseOrdersPage, DebitNotesPage, GoodsReceiptPage, UnitsPage, HsnPage,
+  GodownsPage, ContraPage, BankReconciliationPage, JournalPage, GstJournalPage, StockJournalPage,
+  SeriesConfigPage, PrintTemplatesPage, SalesRegisterPage, PurchaseRegisterPage, JournalRegisterPage,
+  TrialBalancePage, BalanceSheetPage, ProfitLossPage, Gstr1Page, Gstr3bPage, EinvoicePage, EwayPage,
+  BankAccountsPage, TransportersPage, ItemGroupsPage, BulkInvoiceUpdatePage,
+} from '../pages/modules/MunimPages';
 import CustomerList from '../pages/customers/CustomerList';
 import AddCustomer from '../pages/customers/AddCustomer';
 import EditCustomer from '../pages/customers/EditCustomer';
@@ -54,7 +68,7 @@ import {
 } from '../pages/gst/GstPages';
 import {
   ReportsHub, SalesReports, PurchaseReports, PaymentReports, OutstandingReports,
-  InventoryReports, ExpenseReportPage, ProfitLossSummary, GstReports,
+  InventoryReports, ExpenseReportPage, GstReports,
 } from '../pages/reports/ReportPages';
 import { UsersPage, RolesPage, PermissionsPage } from '../pages/users/UserPages';
 import NotFound from '../pages/NotFound';
@@ -74,16 +88,27 @@ export default function AppRoutes() {
       <Route
         element={
           <ProtectedRoute>
-            <AppLayout />
+            <GstModeGuard>
+              <AppLayout />
+            </GstModeGuard>
           </ProtectedRoute>
         }
       >
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/companies" element={<CompanyList />} />
+        <Route path="/companies/create" element={<CreateCompany />} />
+        <Route path="/companies/:id/edit" element={<EditCompany />} />
+        <Route path="/companies/:id" element={<CompanyDetails />} />
+        <Route path="/accounts/charts" element={<ChartsOfAccount />} />
+        <Route path="/accounts/bank" element={<BankAccountsPage />} />
+        <Route path="/accounts/transporters" element={<TransportersPage />} />
+        <Route path="/accounts" element={<AccountListPage />} />
 
         {/* Parties */}
         <Route path="/parties/customers" element={<CustomerList />} />
-        <Route path="/parties/suppliers" element={<Suppliers />} />
+        <Route path="/parties/vendors" element={<Suppliers />} />
         <Route path="/parties/outstanding" element={<Outstanding />} />
+        <Route path="/parties/suppliers" element={<Navigate to="/parties/vendors" replace />} />
         <Route path="/customers" element={<Navigate to="/parties/customers" replace />} />
         <Route path="/customers/add" element={<AddCustomer />} />
         <Route path="/customers/:id" element={<CustomerDetails />} />
@@ -95,24 +120,39 @@ export default function AppRoutes() {
         <Route path="/inventory/add" element={<AddProduct />} />
         <Route path="/inventory/categories" element={<Categories />} />
         <Route path="/inventory/brands" element={<Brands />} />
-        <Route path="/inventory/suppliers" element={<Navigate to="/parties/suppliers" replace />} />
+        <Route path="/inventory/units" element={<UnitsPage />} />
+        <Route path="/inventory/groups" element={<ItemGroupsPage />} />
+        <Route path="/inventory/hsn" element={<HsnPage />} />
+        <Route path="/inventory/godowns" element={<GodownsPage />} />
+        <Route path="/inventory/suppliers" element={<Navigate to="/parties/vendors" replace />} />
+        <Route path="/inventory/vendors" element={<Navigate to="/parties/vendors" replace />} />
         <Route path="/inventory/stock" element={<StockMovements />} />
         <Route path="/inventory/low-stock" element={<LowStock />} />
         <Route path="/inventory/stock-adjustment" element={<StockAdjustment />} />
+        <Route path="/inventory/stock-journal" element={<StockJournalPage />} />
         <Route path="/inventory/:id" element={<ProductDetails />} />
         <Route path="/inventory/:id/edit" element={<EditProduct />} />
 
         {/* Sales */}
         <Route path="/sales/invoices" element={<InvoiceList />} />
+        <Route path="/sales/quotations" element={<QuotationsPage />} />
+        <Route path="/sales/proforma" element={<ProformaPage />} />
+        <Route path="/sales/orders" element={<SalesOrdersPage />} />
+        <Route path="/sales/challans" element={<DeliveryChallansPage />} />
+        <Route path="/sales/credit-notes" element={<CreditNotesPage />} />
         <Route path="/sales/payments" element={<SalesPayments />} />
         <Route path="/sales/returns" element={<SalesReturns />} />
+        <Route path="/sales/bulk-update" element={<BulkInvoiceUpdatePage />} />
         <Route path="/invoices" element={<Navigate to="/sales/invoices" replace />} />
         <Route path="/invoices/create" element={<CreateInvoice />} />
         <Route path="/invoices/upload" element={<UploadInvoice />} />
         <Route path="/invoices/:id" element={<InvoiceView />} />
 
         {/* Purchase */}
+        <Route path="/purchase/orders" element={<PurchaseOrdersPage />} />
         <Route path="/purchase/bills" element={<PurchaseBills />} />
+        <Route path="/purchase/grn" element={<GoodsReceiptPage />} />
+        <Route path="/purchase/debit-notes" element={<DebitNotesPage />} />
         <Route path="/purchase/payments" element={<PurchasePayments />} />
         <Route path="/purchase/returns" element={<PurchaseReturns />} />
 
@@ -128,6 +168,10 @@ export default function AppRoutes() {
         <Route path="/ledger/day-book" element={<DayBook />} />
         <Route path="/ledger/opening-balance" element={<OpeningBalancePage />} />
         <Route path="/ledger/closing-balance" element={<ClosingBalance />} />
+        <Route path="/ledger/contra" element={<ContraPage />} />
+        <Route path="/ledger/bank-reconciliation" element={<BankReconciliationPage />} />
+        <Route path="/ledger/journal" element={<JournalPage />} />
+        <Route path="/ledger/gst-journal" element={<GstJournalPage />} />
 
         {/* Expenses */}
         <Route path="/expenses/categories" element={<ExpenseCategories />} />
@@ -141,6 +185,10 @@ export default function AppRoutes() {
         <Route path="/gst/tax-summary" element={<TaxSummary />} />
         <Route path="/gst/sales" element={<GstSales />} />
         <Route path="/gst/purchase" element={<GstPurchase />} />
+        <Route path="/gst/gstr-1" element={<Gstr1Page />} />
+        <Route path="/gst/gstr-3b" element={<Gstr3bPage />} />
+        <Route path="/gst/e-invoice" element={<EinvoicePage />} />
+        <Route path="/gst/e-way" element={<EwayPage />} />
 
         {/* Reports */}
         <Route path="/reports" element={<ReportsHub />} />
@@ -150,8 +198,13 @@ export default function AppRoutes() {
         <Route path="/reports/outstanding" element={<OutstandingReports />} />
         <Route path="/reports/inventory" element={<InventoryReports />} />
         <Route path="/reports/expenses" element={<ExpenseReportPage />} />
-        <Route path="/reports/profit-loss" element={<ProfitLossSummary />} />
+        <Route path="/reports/profit-loss" element={<ProfitLossPage />} />
         <Route path="/reports/gst" element={<GstReports />} />
+        <Route path="/reports/sales-register" element={<SalesRegisterPage />} />
+        <Route path="/reports/purchase-register" element={<PurchaseRegisterPage />} />
+        <Route path="/reports/journal-register" element={<JournalRegisterPage />} />
+        <Route path="/reports/trial-balance" element={<TrialBalancePage />} />
+        <Route path="/reports/balance-sheet" element={<BalanceSheetPage />} />
         <Route path="/reports/classic" element={<Reports />} />
         <Route path="/analytics" element={<Analytics />} />
 
@@ -162,6 +215,8 @@ export default function AppRoutes() {
 
         {/* Settings */}
         <Route path="/settings" element={<Navigate to="/settings/business" replace />} />
+        <Route path="/settings/series" element={<SeriesConfigPage />} />
+        <Route path="/settings/print" element={<PrintTemplatesPage />} />
         <Route path="/settings/:section" element={<Settings />} />
 
         {/* Legacy */}

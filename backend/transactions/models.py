@@ -22,6 +22,13 @@ class Transaction(models.Model):
         on_delete=models.CASCADE,
         related_name='transactions',
     )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='transactions',
+    )
     customer = models.ForeignKey(
         'customers.Customer',
         on_delete=models.SET_NULL,

@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from django.db.models import Sum
 from accounts.ownership import data_owner
+from companies.company_scope import scope_queryset, assign_owner_company, get_active_company
 from .models import Transaction
 from .serializers import TransactionSerializer
 from customers.models import Customer
@@ -38,7 +39,10 @@ class TransactionViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return Transaction.objects.filter(owner=data_owner(self.request.user)).select_related('customer')
+        return scope_queryset(
+            Transaction.objects.select_related('customer').all(),
+            self.request,
+        )
 
     def get_object(self):
         lookup = self.kwargs.get(self.lookup_field)
@@ -50,14 +54,14 @@ class TransactionViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        tx = serializer.save()
+        kwargs = assign_owner_company(self.request)
+        tx = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='transaction',
             message=f'Transaction: {tx.type} ₹{tx.amount}',
         )
-        notify_credit_transaction(owner, tx)
+        notify_credit_transaction(kwargs['owner'], tx)
 
     def perform_destroy(self, instance):
         customer = instance.customer
@@ -69,6 +73,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
     def record_payment(self, request):
         """Record a payment against a customer (and optional invoice)."""
         owner = data_owner(request.user)
+        company = get_active_company(request)
         customer_raw = request.data.get('customerId') or request.data.get('customer_id')
         amount = request.data.get('amount')
         method = request.data.get('method') or request.data.get('paymentMethod') or 'Cash'
@@ -81,15 +86,16 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
         pk = str(customer_raw).replace('cust_', '')
         try:
-            customer = Customer.objects.get(pk=pk, owner=owner)
+            customer = Customer.objects.get(pk=pk, owner=owner, company=company)
         except Customer.DoesNotExist:
             return Response({'detail': 'Customer not found'}, status=status.HTTP_404_NOT_FOUND)
 
         from datetime import date as date_cls
         from invoices.models import Invoice
 
+        tx_kwargs = assign_owner_company(request)
         tx = Transaction.objects.create(
-            owner=owner,
+            **tx_kwargs,
             customer=customer,
             date=date or date_cls.today(),
             type=Transaction.Type.PAYMENT,
@@ -104,7 +110,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
         if invoice_id:
             inv_pk = str(invoice_id).replace('inv_', '')
             try:
-                invoice = Invoice.objects.get(pk=inv_pk, owner=owner)
+                invoice = Invoice.objects.get(pk=inv_pk, owner=owner, company=company)
                 invoice.paid_amount = (invoice.paid_amount or 0) + float(amount)
                 invoice.recalculate_totals()
                 tx.invoice = invoice
@@ -114,7 +120,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
         customer.recalculate_balance()
         ActivityLog.objects.create(
-            owner=owner,
+            owner=tx_kwargs['owner'],
             type='payment',
             message=f'Payment recorded: ₹{amount}',
         )
@@ -200,3 +206,46 @@ class TransactionViewSet(viewsets.ModelViewSet):
                 'createdAt': activity.created_at.isoformat(),
             },
         }, status=status.HTTP_201_CREATED)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Transaction created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Transaction updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Transaction deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )

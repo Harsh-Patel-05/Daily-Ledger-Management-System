@@ -69,8 +69,25 @@ function tooltipStyle(rect, placement, cardW = 360, cardH = 220) {
 }
 
 function ProgressDots({ total, stepIndex }) {
+  if (total > 18) {
+    const pct = Math.round(((stepIndex + 1) / total) * 100);
+    return (
+      <div className="w-full">
+        <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted mb-1.5">
+          <span>Progress</span>
+          <span>{pct}%</span>
+        </div>
+        <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+          <div
+            className="h-full rounded-full bg-primary transition-all duration-300"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1.5 flex-wrap">
       {Array.from({ length: total }).map((_, i) => (
         <span
           key={i}
@@ -319,7 +336,7 @@ export default function ProductTour() {
 
   useLayoutEffect(() => {
     if (!active) return;
-    const t = setTimeout(measure, step?.openSection ? 260 : 100);
+    const t = setTimeout(measure, step?.openSection ? 320 : 100);
     return () => clearTimeout(t);
   }, [active, step, location.pathname, measure, tick]);
 

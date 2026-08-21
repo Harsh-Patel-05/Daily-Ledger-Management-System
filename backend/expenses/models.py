@@ -13,6 +13,13 @@ class ExpenseCategory(models.Model):
         on_delete=models.CASCADE,
         related_name='expense_categories',
     )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='expense_categories',
+    )
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
     status = models.CharField(
@@ -38,6 +45,13 @@ class Expense(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        related_name='expenses',
+    )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='expenses',
     )
     category = models.ForeignKey(

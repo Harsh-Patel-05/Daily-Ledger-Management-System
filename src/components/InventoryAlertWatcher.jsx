@@ -26,8 +26,8 @@ export default function InventoryAlertWatcher() {
     }
 
     const alertIds = new Set([
-      ...stats.lowStockItems.map((p) => `low:${p.id}`),
-      ...stats.outOfStockItems.map((p) => `out:${p.id}`),
+      ...(stats.lowStockItems || []).map((p) => `low:${p.id}`),
+      ...(stats.outOfStockItems || []).map((p) => `out:${p.id}`),
     ]);
 
     if (!primedRef.current) {

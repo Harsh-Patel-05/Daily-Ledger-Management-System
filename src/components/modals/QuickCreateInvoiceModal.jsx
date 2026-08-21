@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 import { useInventory } from '../../context/InventoryContext';
+import { useCompanies } from '../../context/CompaniesContext';
 import { useToast } from '../../context/ToastContext';
 import { useStackedModal } from '../../hooks/useStackedModal';
 import { calcInvoiceTotals } from '../../utils/invoiceUtils';
@@ -15,6 +16,7 @@ import Input from '../ui/Input';
 import Dropdown from '../ui/Dropdown';
 import DatePicker from '../ui/DatePicker';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const DEFAULT_INVOICE_FORMAT = 'classic';
 
@@ -22,6 +24,7 @@ export default function QuickCreateInvoiceModal() {
   const { inStack, open, payload, closeModal } = useStackedModal('quickInvoice');
   const { customers, settings, profile, addInvoice } = useApp();
   const { products, getProduct } = useInventory();
+  const { isGstEnabled } = useCompanies();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -46,8 +49,8 @@ export default function QuickCreateInvoiceModal() {
         quantity: '1',
         rate: '',
         discount: 0,
-        taxRate: settings.defaultTaxRate || 18,
-        gstType: settings.defaultGstMode === 'non_gst' ? 'Non-GST' : 'GST',
+        taxRate: !isGstEnabled || settings.defaultGstMode === 'non_gst' ? 0 : (settings.defaultTaxRate || 18),
+        gstType: !isGstEnabled || settings.defaultGstMode === 'non_gst' ? 'Non-GST' : 'GST',
         paymentMethod: 'Credit',
       });
       fetchNextInvoiceNumber()
@@ -145,7 +148,7 @@ export default function QuickCreateInvoiceModal() {
       closeModal();
       navigate(`/invoices/${invoice.id}`);
     } catch (err) {
-      toast.error(err.message || 'Failed to create invoice');
+      toast.error(getApiErrorMessage(err, 'Failed to create invoice'));
     } finally {
       setLoading(false);
     }
@@ -212,20 +215,24 @@ export default function QuickCreateInvoiceModal() {
         <Input label="Qty" type="number" value={form.quantity} onChange={set('quantity')} error={errors.quantity} />
         <Input label="Rate (₹)" type="number" value={form.rate} onChange={set('rate')} error={errors.rate} />
         <Input label="Discount" type="number" value={form.discount} onChange={set('discount')} />
-        <Dropdown
-          label="Invoice Type"
-          value={form.gstType}
-          onChange={(v) => setForm((f) => ({
-            ...f,
-            gstType: v,
-            taxRate: v === 'Non-GST' ? 0 : (f.taxRate || settings.defaultTaxRate || 18),
-          }))}
-          options={[
-            { value: 'GST', label: 'GST' },
-            { value: 'Non-GST', label: 'Non-GST' },
-          ]}
-        />
-        {form.gstType !== 'Non-GST' && (
+        {isGstEnabled ? (
+          <Dropdown
+            label="Invoice Type"
+            value={form.gstType}
+            onChange={(v) => setForm((f) => ({
+              ...f,
+              gstType: v,
+              taxRate: v === 'Non-GST' ? 0 : (f.taxRate || settings.defaultTaxRate || 18),
+            }))}
+            options={[
+              { value: 'GST', label: 'GST' },
+              { value: 'Non-GST', label: 'Non-GST' },
+            ]}
+          />
+        ) : (
+          <Input label="Invoice Type" value="Non-GST" disabled />
+        )}
+        {isGstEnabled && form.gstType !== 'Non-GST' && (
           <Input label="GST %" type="number" value={form.taxRate} onChange={set('taxRate')} />
         )}
         <Dropdown

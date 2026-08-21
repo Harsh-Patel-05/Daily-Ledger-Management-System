@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -37,8 +37,9 @@ import { useTheme } from '../../context/ThemeContext';
 import { useModal } from '../../context/ModalContext';
 import { useTour } from '../../context/TourContext';
 import { useInventory } from '../../context/InventoryContext';
-import { getPageTitle } from '../../navigation/menuConfig';
+import { useCompanies } from '../../context/CompaniesContext';
 import Avatar from '../ui/Avatar';
+import CompanySwitcher from './CompanySwitcher';
 import { cn } from '../../utils/formatters';
 
 /**
@@ -46,11 +47,26 @@ import { cn } from '../../utils/formatters';
  */
 const CREATE_GROUPS = [
   {
+    id: 'companies',
+    label: 'Companies',
+    items: [
+      { label: 'Create Company', icon: FaPlus, action: 'nav', to: '/companies/create' },
+      { label: 'All Companies', icon: FaUsers, action: 'nav', to: '/companies' },
+    ],
+  },
+  {
+    id: 'accounts',
+    label: 'Accounts',
+    items: [
+      { label: 'Charts of Account', icon: FaBook, action: 'nav', to: '/accounts/charts' },
+    ],
+  },
+  {
     id: 'parties',
     label: 'Parties',
     items: [
       { label: 'Add Customer', icon: FaUserPlus, action: 'modal', type: 'quickCustomer' },
-      { label: 'Suppliers', icon: FaTruck, action: 'nav', to: '/parties/suppliers' },
+      { label: 'Vendors', icon: FaTruck, action: 'nav', to: '/parties/vendors' },
       { label: 'Outstanding', icon: FaClock, action: 'nav', to: '/parties/outstanding' },
     ],
   },
@@ -112,15 +128,20 @@ const CREATE_GROUPS = [
     id: 'reports',
     label: 'Reports / GST',
     items: [
-      { label: 'GST Dashboard', icon: FaPercentage, action: 'nav', to: '/gst' },
+      { label: 'GST Dashboard', icon: FaPercentage, action: 'nav', to: '/gst', gstOnly: true },
       { label: 'Sales Reports', icon: FaChartBar, action: 'nav', to: '/reports/sales' },
       { label: 'Profit / Loss', icon: FaChartBar, action: 'nav', to: '/reports/profit-loss' },
     ],
   },
 ];
 
-function CreateMenu({ open, onAction }) {
+function CreateMenu({ open, onAction, isGstEnabled = true }) {
   if (!open) return null;
+  const groups = CREATE_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => isGstEnabled || !item.gstOnly),
+    label: !isGstEnabled && group.id === 'reports' ? 'Reports' : group.label,
+  })).filter((g) => g.items.length);
   return (
     <motion.div
       initial={{ opacity: 0, y: 4, scale: 0.98 }}
@@ -135,7 +156,7 @@ function CreateMenu({ open, onAction }) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain scrollbar-thin">
-        {CREATE_GROUPS.map((group) => (
+        {groups.map((group) => (
           <div key={group.id} className="border-b border-border/60 dark:border-slate-700/80 last:border-b-0">
             <p className="sticky top-0 z-[1] px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted bg-surface/95 dark:bg-surface/95 backdrop-blur-sm">
               {group.label}
@@ -191,18 +212,13 @@ export default function Navbar() {
     setSettings,
   } = useApp();
   const { products } = useInventory();
+  const { companies, isGstEnabled } = useCompanies();
   const { user, logout } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
   const { openModal } = useModal();
   const { startTour } = useTour();
   const navigate = useNavigate();
   const location = useLocation();
-
-  const pageMeta = useMemo(() => {
-    const meta = getPageTitle(location.pathname);
-    if (typeof meta === 'string') return { title: meta, section: null };
-    return meta;
-  }, [location.pathname]);
 
   const handleThemeToggle = () => {
     const nextMode = darkMode ? 'light' : 'dark';
@@ -245,6 +261,21 @@ export default function Navbar() {
   const q = searchQuery.trim().toLowerCase();
   const searchResults = q
     ? [
+        ...companies
+          .filter((c) =>
+            (c.name || '').toLowerCase().includes(q)
+            || (c.gstin || '').toLowerCase().includes(q)
+            || (c.mobile || '').includes(searchQuery.trim())
+          )
+          .slice(0, 3)
+          .map((c) => ({
+            type: 'Company',
+            id: c.id,
+            label: c.name,
+            sub: c.gstin || c.city || 'Company',
+            to: `/companies/${c.id}`,
+            tone: 'blue',
+          })),
         ...customers
           .filter((c) =>
             (c.name || '').toLowerCase().includes(q)
@@ -338,18 +369,7 @@ export default function Navbar() {
             {sidebarCollapsed ? <FaExpandAlt size={14} /> : <FaCompressAlt size={14} />}
           </button>
 
-          <div className="min-w-0 flex-1 sm:flex-none">
-            <div className="min-w-0">
-              {pageMeta.section && (
-                <p className="hidden sm:block text-[10px] uppercase tracking-wider text-muted leading-none mb-0.5 truncate">
-                  {pageMeta.section}
-                </p>
-              )}
-              <h1 className="text-sm lg:text-[15px] font-semibold text-slate-800 dark:text-white truncate leading-tight">
-                {pageMeta.title}
-              </h1>
-            </div>
-          </div>
+          <CompanySwitcher className="hidden sm:block shrink-0" />
 
           <div className="relative hidden md:block ml-1 lg:ml-2 flex-1 max-w-md" ref={searchRef}>
             <div className="relative">
@@ -365,7 +385,7 @@ export default function Navbar() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !searchQuery.trim()) setCommandOpen(true);
                 }}
-                placeholder="Search party, product, invoice…"
+                placeholder="Search party, company, product, invoice…"
                 className="w-full rounded-xl border border-border dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 pl-9 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary focus:bg-white dark:focus:bg-slate-700 transition-all"
               />
             </div>
@@ -419,6 +439,7 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
+          <CompanySwitcher className="sm:hidden" />
           <div className="relative hidden lg:block" ref={createRef} data-tour="create-menu">
             <button
               type="button"
@@ -442,7 +463,7 @@ export default function Navbar() {
               <FaChevronDown size={9} className={cn('transition-transform', createOpen && 'rotate-180')} />
             </button>
             <AnimatePresence>
-              {createOpen && <CreateMenu open={createOpen} onAction={runAction} />}
+              {createOpen && <CreateMenu open={createOpen} onAction={runAction} isGstEnabled={isGstEnabled} />}
             </AnimatePresence>
           </div>
 
@@ -461,7 +482,7 @@ export default function Navbar() {
               <FaPlus size={14} />
             </button>
             <AnimatePresence>
-              {mobileCreateOpen && <CreateMenu open={mobileCreateOpen} onAction={runAction} />}
+              {mobileCreateOpen && <CreateMenu open={mobileCreateOpen} onAction={runAction} isGstEnabled={isGstEnabled} />}
             </AnimatePresence>
           </div>
 

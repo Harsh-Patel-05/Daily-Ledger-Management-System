@@ -32,7 +32,6 @@ export default function PurchasePayments() {
       subtitle="Paying a bill auto-updates its balance"
       breadcrumbs={[{ label: 'Purchase', to: '/purchase/bills' }, { label: 'Purchase Payments' }]}
       externalCollection={purchasePayments}
-      storageKey="__purchase_payments_ui"
       onCreate={(payload) => {
         const bill = purchaseBills.items.find((b) => b.billNo === payload.billNo);
         addPurchasePayment({
@@ -47,7 +46,7 @@ export default function PurchasePayments() {
         { key: 'date', label: 'Date', type: 'date', required: true, defaultValue: new Date().toISOString().slice(0, 10) },
         {
           key: 'supplierName',
-          label: 'Supplier',
+          label: 'Vendor',
           type: 'select',
           options: supplierOptions,
           required: true,
@@ -75,7 +74,7 @@ export default function PurchasePayments() {
       ]}
       columns={[
         { key: 'date', label: 'Date', render: (v) => formatDate(v) },
-        { key: 'supplierName', label: 'Supplier' },
+        { key: 'supplierName', label: 'Vendor' },
         { key: 'billNo', label: 'Bill No', render: (v) => v || '—' },
         { key: 'mode', label: 'Mode' },
         { key: 'amount', label: 'Amount', render: (v) => formatCurrency(v) },

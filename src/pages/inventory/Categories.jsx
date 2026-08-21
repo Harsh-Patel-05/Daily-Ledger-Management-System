@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaArrowLeft, FaPlus, FaEdit, FaTrash, FaTags } from 'react-icons/fa';
 import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Breadcrumbs, Card, Button, Input, Modal, ConfirmationDialog, EmptyState,
 } from '../../components/ui';
@@ -45,15 +46,15 @@ export default function Categories() {
     setLoading(true);
     try {
       if (editing) {
-        await updateCategory(editing.id, form);
-        toast.success('Category updated');
+        const __apiRes = await updateCategory(editing.id, form);
+        toast.success(getApiMessage(__apiRes, 'Category updated'));
       } else {
-        await addCategory(form);
-        toast.success('Category added');
+        const __apiRes = await addCategory(form);
+        toast.success(getApiMessage(__apiRes, 'Category added'));
       }
       setOpen(false);
     } catch (err) {
-      toast.error(err.message || 'Failed to save');
+      toast.error(getApiErrorMessage(err, 'Failed to save'));
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,7 @@ export default function Categories() {
       setDeleteId(null);
       toast.success('Category deleted');
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
       setDeleteId(null);
     }
   };

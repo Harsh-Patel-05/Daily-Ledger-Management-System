@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function ResetPassword() {
   const [password, setPassword] = useState('');
@@ -30,11 +31,11 @@ export default function ResetPassword() {
 
     setLoading(true);
     try {
-      await resetPassword({ email, otp, password, confirm_password: confirm });
-      toast.success('Password reset successfully');
+      const res = await resetPassword({ email, otp, password, confirm_password: confirm });
+      toast.success(getApiMessage(res, 'Password reset successfully'));
       navigate('/login');
     } catch (err) {
-      toast.error(err.message || 'Reset failed');
+      toast.error(getApiErrorMessage(err, 'Reset failed'));
     } finally {
       setLoading(false);
     }

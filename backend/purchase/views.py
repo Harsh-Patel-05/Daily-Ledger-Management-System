@@ -1,5 +1,7 @@
 from accounts.ownership import data_owner
-from rest_framework import viewsets
+from companies.company_scope import scope_queryset, assign_owner_company
+from rest_framework import viewsets, status
+from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from notifications.models import ActivityLog
 from .models import PurchaseBill, PurchasePayment, PurchaseReturn
@@ -28,15 +30,16 @@ class PurchaseBillViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return PurchaseBill.objects.filter(
-            owner=data_owner(self.request.user)
-        ).select_related('supplier', 'product')
+        return scope_queryset(
+            PurchaseBill.objects.select_related('supplier', 'product').all(),
+            self.request,
+        )
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        bill = serializer.save()
+        kwargs = assign_owner_company(self.request)
+        bill = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='purchase',
             message=f'Purchase bill added: {bill.bill_no}',
         )
@@ -49,6 +52,49 @@ class PurchaseBillViewSet(viewsets.ModelViewSet):
             owner=owner,
             type='purchase',
             message=f'Purchase bill deleted: {bill_no}',
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase bill created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase bill updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase bill deleted successfully',
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -69,15 +115,16 @@ class PurchasePaymentViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return PurchasePayment.objects.filter(
-            owner=data_owner(self.request.user)
-        ).select_related('bill')
+        return scope_queryset(
+            PurchasePayment.objects.select_related('bill').all(),
+            self.request,
+        )
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        payment = serializer.save()
+        kwargs = assign_owner_company(self.request)
+        payment = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='purchase',
             message=f'Purchase payment: {payment.amount} ({payment.bill_no or "—"})',
         )
@@ -90,6 +137,49 @@ class PurchasePaymentViewSet(viewsets.ModelViewSet):
             owner=owner,
             type='purchase',
             message=f'Purchase payment deleted: {label}',
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase payment created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase payment updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase payment deleted successfully',
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -111,15 +201,16 @@ class PurchaseReturnViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return PurchaseReturn.objects.filter(
-            owner=data_owner(self.request.user)
-        ).select_related('bill')
+        return scope_queryset(
+            PurchaseReturn.objects.select_related('bill').all(),
+            self.request,
+        )
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        ret = serializer.save()
+        kwargs = assign_owner_company(self.request)
+        ret = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='purchase',
             message=f'Purchase return: {ret.amount} ({ret.bill_no or "—"})',
         )
@@ -132,4 +223,47 @@ class PurchaseReturnViewSet(viewsets.ModelViewSet):
             owner=owner,
             type='purchase',
             message=f'Purchase return deleted: {label}',
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase return created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase return updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Purchase return deleted successfully',
+            },
+            status=status.HTTP_200_OK,
         )

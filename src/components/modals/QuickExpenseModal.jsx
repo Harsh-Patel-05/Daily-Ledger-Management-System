@@ -8,6 +8,7 @@ import Input from '../ui/Input';
 import Dropdown from '../ui/Dropdown';
 import DatePicker from '../ui/DatePicker';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const EXPENSE_CATEGORIES = [
   'Rent',
@@ -67,7 +68,7 @@ export default function QuickExpenseModal() {
     setLoading(true);
     try {
       // Backend expense create also writes Transaction type=expense
-      await addExpense({
+      const __apiRes = await addExpense({
         date: form.date,
         categoryName: form.category,
         amount: Number(form.amount),
@@ -75,10 +76,10 @@ export default function QuickExpenseModal() {
         notes: form.itemDescription || form.notes,
         gstType: 'Non-GST',
       });
-      toast.success('Expense recorded');
+      toast.success(getApiMessage(__apiRes, 'Expense recorded'));
       closeModal();
     } catch (err) {
-      toast.error(err.message || 'Failed to save expense');
+      toast.error(getApiErrorMessage(err, 'Failed to save expense'));
     } finally {
       setLoading(false);
     }

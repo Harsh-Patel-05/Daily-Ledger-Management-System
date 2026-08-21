@@ -4,6 +4,7 @@ import { FaArrowLeft } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { Breadcrumbs, Card, Input, Button, PageLoader } from '../../components/ui';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function EditCustomer() {
   const { id } = useParams();
@@ -55,11 +56,11 @@ export default function EditCustomer() {
 
     setLoading(true);
     try {
-      await updateCustomer(id, { ...form, creditLimit: Number(form.creditLimit) || 0 });
-      toast.success('Customer updated successfully');
+      const __apiRes = await updateCustomer(id, { ...form, creditLimit: Number(form.creditLimit) || 0 });
+      toast.success(getApiMessage(__apiRes, 'Customer updated successfully'));
       navigate(`/customers/${id}`);
     } catch (err) {
-      toast.error(err.message || 'Update failed');
+      toast.error(getApiErrorMessage(err, 'Update failed'));
     } finally {
       setLoading(false);
     }

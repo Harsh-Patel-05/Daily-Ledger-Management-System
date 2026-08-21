@@ -11,12 +11,18 @@ export function UsersPage() {
       subtitle="Staff accounts (API)"
       breadcrumbs={[{ label: 'Users & Roles', to: '/users' }, { label: 'Users' }]}
       externalCollection={users}
-      storageKey="__users_ui"
       addLabel="Add User"
       searchKeys={['name', 'email', 'role']}
       fields={[
         { key: 'name', label: 'Name', required: true },
         { key: 'email', label: 'Email', required: true },
+        {
+          key: 'password',
+          label: 'Password',
+          type: 'password',
+          required: ({ editing }) => !editing,
+          placeholder: ({ editing }) => (editing ? 'Leave blank to keep current' : 'Min 6 characters'),
+        },
         { key: 'phone', label: 'Phone' },
         {
           key: 'role',
@@ -52,7 +58,6 @@ export function RolesPage() {
       subtitle="Access roles for your team (API)"
       breadcrumbs={[{ label: 'Users & Roles', to: '/users' }, { label: 'Roles' }]}
       externalCollection={roles}
-      storageKey="__roles_ui"
       addLabel="Add Role"
       searchKeys={['name', 'description']}
       fields={[

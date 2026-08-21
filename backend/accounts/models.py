@@ -69,6 +69,10 @@ class ShopRole(models.Model):
     )
     name = models.CharField(max_length=80)
     description = models.TextField(blank=True)
+    is_system = models.BooleanField(
+        default=False,
+        help_text='Built-in role seeded by the system; prefer not deleting.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

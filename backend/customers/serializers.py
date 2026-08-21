@@ -7,8 +7,10 @@ class CustomerSerializer(serializers.ModelSerializer):
     class Meta:
         model = Customer
         fields = (
-            'id', 'name', 'mobile', 'business_name', 'address', 'gst', 'email',
-            'credit_limit', 'current_balance', 'status', 'photo', 'notes',
+            'id', 'name', 'mobile', 'business_name', 'address',
+            'billing_address', 'shipping_address', 'gst', 'pan', 'email',
+            'state', 'state_code', 'pincode', 'credit_limit', 'credit_days',
+            'current_balance', 'status', 'group', 'photo', 'notes',
             'last_transaction', 'tags', 'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'current_balance', 'last_transaction', 'created_at', 'updated_at')

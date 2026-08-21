@@ -3,26 +3,46 @@ import { useNavigate, Link, useParams } from 'react-router-dom';
 import { FaArrowLeft } from 'react-icons/fa';
 import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
+import { booksList } from '../../api/books';
 import { Breadcrumbs, Card } from '../../components/ui';
 import ProductForm from './ProductForm';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function EditProduct() {
   const { id } = useParams();
   const { categories, brands, suppliers, getProduct, updateProduct } = useInventory();
   const product = getProduct(id);
   const [form, setForm] = useState(null);
+  const [units, setUnits] = useState([]);
+  const [godowns, setGodowns] = useState([]);
+  const [itemGroups, setItemGroups] = useState([]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
+    booksList('units').then((d) => setUnits(Array.isArray(d) ? d : d?.results || [])).catch(() => setUnits([]));
+    booksList('godowns').then((d) => setGodowns(Array.isArray(d) ? d : d?.results || [])).catch(() => setGodowns([]));
+    booksList('item-groups').then((d) => setItemGroups(Array.isArray(d) ? d : d?.results || [])).catch(() => setItemGroups([]));
+  }, []);
+
+  useEffect(() => {
     if (product) {
       setForm({
         name: product.name,
+        sku: product.sku || '',
+        barcode: product.barcode || '',
         brandId: product.brandId != null && product.brandId !== '' ? String(product.brandId) : '',
         categoryId: product.categoryId != null && product.categoryId !== '' ? String(product.categoryId) : '',
+        itemGroupId: product.itemGroupId != null && product.itemGroupId !== '' ? String(product.itemGroupId) : '',
         supplierId: product.supplierId != null && product.supplierId !== '' ? String(product.supplierId) : '',
+        unitId: product.unitId != null && product.unitId !== '' ? String(product.unitId) : '',
+        alternateUnits: (product.alternateUnits || []).map((u) => ({
+          unitId: String(u.unitId),
+          conversionFactor: u.conversionFactor ?? 1,
+          barcode: u.barcode || '',
+        })),
         description: product.description || '',
         purchaseDate: product.purchaseDate || '',
         purchasePrice: product.purchasePrice,
@@ -31,6 +51,7 @@ export default function EditProduct() {
         sellingPriceWithGst: product.sellingPriceWithGst ?? product.sellingPrice,
         taxRate: product.taxRate,
         purchasedQuantity: product.purchasedQuantity ?? 0,
+        reorderLevel: product.reorderLevel ?? 0,
         status: product.status || 'active',
       });
     }
@@ -61,11 +82,11 @@ export default function EditProduct() {
     if (!validate()) return;
     setLoading(true);
     try {
-      await updateProduct(id, form);
-      toast.success('Product updated');
+      const __apiRes = await updateProduct(id, form);
+      toast.success(getApiMessage(__apiRes, 'Product updated'));
       navigate(`/inventory/${id}`);
     } catch (err) {
-      toast.error(err.message || 'Failed to update');
+      toast.error(getApiErrorMessage(err, 'Failed to update'));
     } finally {
       setLoading(false);
     }
@@ -95,7 +116,10 @@ export default function EditProduct() {
           errors={errors}
           categories={categories}
           brands={brands}
+          itemGroups={itemGroups}
           suppliers={suppliers}
+          units={units}
+          godowns={godowns}
           loading={loading}
           submitLabel="Update Product"
           onSubmit={handleSubmit}

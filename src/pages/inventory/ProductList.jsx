@@ -13,10 +13,14 @@ import { formatCurrency, formatNumber, formatDate } from '../../utils/formatters
 import { filterBySearch, sortBy, getStatusColor } from '../../utils/helpers';
 import {
   Breadcrumbs, Card, SearchBox, Filter, Table, Pagination,
-  Button, ConfirmationDialog, FloatingAddButton, EmptyState, ExportButton, StatCard, Modal,
+  Button, ConfirmationDialog, EmptyState, ExportButton, StatCard, Modal,
 } from '../../components/ui';
 import { exportToCsv, downloadProductImportSample } from '../../utils/exportCsv';
-import { importProducts } from '../../api/inventory';function stockBadge(product) {
+import { importProducts } from '../../api/inventory';
+import { booksList } from '../../api/books';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
+
+function stockBadge(product) {
   const qty = Number(product.stockQty) || 0;
   if (qty <= 0) {
     return <span className="inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">Out of stock</span>;
@@ -39,6 +43,7 @@ export default function ProductList() {
   const [statusFilter, setStatusFilter] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [brandFilter, setBrandFilter] = useState('');
+  const [itemGroupFilter, setItemGroupFilter] = useState('');
   const [stockFilter, setStockFilter] = useState('');
   const [sortKey, setSortKey] = useState('name');
   const [sortDir, setSortDir] = useState('asc');
@@ -48,14 +53,22 @@ export default function ProductList() {
   const [updateExisting, setUpdateExisting] = useState(true);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState(null);
+  const [itemGroups, setItemGroups] = useState([]);
   const fileInputRef = useRef(null);
   const debouncedSearch = useDebounce(search);
 
+  useEffect(() => {
+    booksList('item-groups')
+      .then((d) => setItemGroups(Array.isArray(d) ? d : d?.results || []))
+      .catch(() => setItemGroups([]));
+  }, []);
+
   const filtered = useMemo(() => {
-    let list = filterBySearch(products, debouncedSearch, ['name', 'brand']);
+    let list = filterBySearch(products, debouncedSearch, ['name', 'brand', 'sku', 'barcode', 'itemGroup']);
     if (statusFilter) list = list.filter((p) => p.status === statusFilter);
     if (categoryFilter) list = list.filter((p) => String(p.categoryId) === String(categoryFilter));
     if (brandFilter) list = list.filter((p) => String(p.brandId) === String(brandFilter));
+    if (itemGroupFilter) list = list.filter((p) => String(p.itemGroupId) === String(itemGroupFilter));
     if (stockFilter === 'low') {
       list = list.filter((p) => Number(p.stockQty) > 0 && Number(p.stockQty) <= 10);
     } else if (stockFilter === 'out') {
@@ -64,11 +77,11 @@ export default function ProductList() {
       list = list.filter((p) => Number(p.stockQty) > 10);
     }
     return sortBy(list, sortKey, sortDir);
-  }, [products, debouncedSearch, statusFilter, categoryFilter, brandFilter, stockFilter, sortKey, sortDir]);
+  }, [products, debouncedSearch, statusFilter, categoryFilter, brandFilter, itemGroupFilter, stockFilter, sortKey, sortDir]);
 
   const { data, page, totalPages, total, perPage, goToPage, resetPage } = usePagination(filtered, 8);
 
-  useEffect(() => { resetPage(); }, [debouncedSearch, statusFilter, categoryFilter, brandFilter, stockFilter]);
+  useEffect(() => { resetPage(); }, [debouncedSearch, statusFilter, categoryFilter, brandFilter, itemGroupFilter, stockFilter]);
 
   const handleDelete = async () => {
     try {
@@ -76,7 +89,7 @@ export default function ProductList() {
       setDeleteId(null);
       toast.success('Product deleted');
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
     }
   };
 
@@ -102,7 +115,7 @@ export default function ProductList() {
         `Import done: ${result.created || 0} new, ${result.updated || 0} updated`
       );
     } catch (err) {
-      toast.error(err.message || 'Import failed');
+      toast.error(getApiErrorMessage(err, 'Import failed'));
     } finally {
       setImporting(false);
     }
@@ -116,7 +129,7 @@ export default function ProductList() {
         <div>
           <p className="font-medium text-slate-800 dark:text-slate-100">{row.name}</p>
           <p className="text-xs text-muted">
-            {[getBrand(row.brandId)?.name || row.brand, getCategory(row.categoryId)?.name || 'Uncategorized']
+            {[getBrand(row.brandId)?.name || row.brand, getCategory(row.categoryId)?.name || 'Uncategorized', row.itemGroup]
               .filter(Boolean)
               .join(' · ')}
           </p>
@@ -223,8 +236,8 @@ export default function ProductList() {
           <Link to="/inventory/low-stock">
             <Button variant="outline"><FaExclamationTriangle size={12} /> Low Stock</Button>
           </Link>
-          <Link to="/parties/suppliers">
-            <Button variant="outline"><FaTruck size={12} /> Suppliers</Button>
+          <Link to="/parties/vendors">
+            <Button variant="outline"><FaTruck size={12} /> Vendors</Button>
           </Link>
           <ExportButton
             onExport={() => {
@@ -286,6 +299,12 @@ export default function ProductList() {
               options={categories.map((c) => ({ value: c.id, label: c.name }))}
             />
             <Filter
+              value={itemGroupFilter}
+              onChange={setItemGroupFilter}
+              label="All Item Groups"
+              options={itemGroups.map((g) => ({ value: g.id, label: g.name }))}
+            />
+            <Filter
               value={statusFilter}
               onChange={setStatusFilter}
               label="All Status"
@@ -345,8 +364,6 @@ export default function ProductList() {
           </>
         )}
       </Card>
-
-      <FloatingAddButton to="/inventory/add" label="Add Product" />
 
       <ConfirmationDialog
         open={!!deleteId}

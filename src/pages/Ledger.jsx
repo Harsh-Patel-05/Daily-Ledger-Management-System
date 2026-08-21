@@ -1,69 +1,54 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FaPrint, FaFileExport, FaBook } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { useApp } from '../context/AppContext';
-import { useLocalModules } from '../context/LocalModulesContext';
 import { useToast } from '../context/ToastContext';
+import { getLedger } from '../api/core';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { TRANSACTION_TYPES } from '../utils/helpers';
 import { exportToCsv } from '../utils/exportCsv';
+import { getApiMessage, getApiErrorMessage } from '../utils/apiMessage';
 import {
-  Breadcrumbs, Card, CardHeader, Dropdown, DatePicker, Button, Badge, EmptyState,
+  Breadcrumbs, Card, CardHeader, Dropdown, DatePicker, Button, Badge, EmptyState, Loader,
 } from '../components/ui';
 
 export default function Ledger() {
-  const { customers, getCustomerTransactions, getCustomer } = useApp();
-  const { openingBalances } = useLocalModules();
+  const { customers, getCustomer } = useApp();
   const toast = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [customerId, setCustomerId] = useState(searchParams.get('customer') || '');
-  const [month, setMonth] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [ledger, setLedger] = useState(null);
 
   const customer = customerId ? getCustomer(customerId) : null;
 
-  const ledgerEntries = useMemo(() => {
-    if (!customerId) return [];
-    let txs = getCustomerTransactions(customerId);
-
-    if (month) {
-      txs = txs.filter((t) => t.date.startsWith(month));
+  const load = useCallback(async () => {
+    if (!customerId) {
+      setLedger(null);
+      return;
     }
-    if (fromDate) txs = txs.filter((t) => t.date >= fromDate);
-    if (toDate) txs = txs.filter((t) => t.date <= toDate);
+    setLoading(true);
+    try {
+      const data = await getLedger(customerId, {
+        date_from: fromDate || undefined,
+        date_to: toDate || undefined,
+      });
+      setLedger(data);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Failed to load ledger'));
+      setLedger(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [customerId, fromDate, toDate, toast]);
 
-    txs = [...txs].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const ob = openingBalances.items.find(
-      (o) =>
-        o.partyType === 'customer'
-        && customer
-        && String(o.partyName).toLowerCase() === String(customer.name || '').toLowerCase()
-    );
-    const openingBalance = ob
-      ? (ob.type === 'credit' ? -(Number(ob.amount) || 0) : (Number(ob.amount) || 0))
-      : 0;
-    let running = openingBalance;
-    const entries = txs.map((tx) => {
-      let credit = 0;
-      let debit = 0;
-      if (tx.type === 'credit') credit = tx.amount;
-      if (tx.type === 'payment' || tx.type === 'return' || tx.type === 'discount') debit = tx.amount;
-      running = running + credit - debit;
-      return { ...tx, credit, debit, runningBalance: running };
-    });
-
-    return {
-      openingBalance,
-      entries,
-      closingBalance: running,
-      totalCredit: entries.reduce((s, e) => s + e.credit, 0),
-      totalPayment: entries.reduce((s, e) => s + e.debit, 0),
-    };
-  }, [customerId, month, fromDate, toDate, getCustomerTransactions, openingBalances.items, customer]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const handleCustomerChange = (id) => {
     setCustomerId(id);
@@ -71,26 +56,25 @@ export default function Ledger() {
     else setSearchParams({});
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   const handleExport = () => {
-    if (!customer || !ledgerEntries?.entries?.length) {
+    const name = ledger?.customer?.name || customer?.name;
+    if (!name || !ledger?.entries?.length) {
       toast.error('Nothing to export');
       return;
     }
-    const rows = ledgerEntries.entries.map((e) => ({
+    const rows = ledger.entries.map((e) => ({
       Date: e.date,
       Type: e.type,
       Description: e.itemDescription || e.description || '',
-      Credit: e.credit,
       Debit: e.debit,
-      Balance: e.runningBalance,
+      Credit: e.credit,
+      Balance: e.runningBalance ?? e.balance,
       Method: e.paymentMethod || '',
       Notes: e.notes || '',
     }));
-    exportToCsv(rows, `ledger-${customer.name.replace(/\s+/g, '-').toLowerCase()}.csv`);
+    exportToCsv(rows, `ledger-${String(name).replace(/\s+/g, '-').toLowerCase()}.csv`);
     toast.success('Ledger exported as CSV');
   };
 
@@ -98,51 +82,51 @@ export default function Ledger() {
     if (type === 'credit') return 'border-l-blue-500 bg-blue-50/50 dark:bg-blue-900/10';
     if (type === 'payment') return 'border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-900/10';
     if (type === 'return') return 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-900/10';
-    if (type === 'discount') return 'border-l-purple-500 bg-purple-50/50 dark:bg-purple-900/10';
-    return 'border-l-slate-400';
+    return 'border-l-purple-500 bg-purple-50/50 dark:bg-purple-900/10';
   };
+
+  const opening = Number(ledger?.openingBalance) || 0;
+  const closing = Number(ledger?.closingBalance) || 0;
+  const totalDebit = Number(ledger?.totalDebit ?? ledger?.totalCreditSale) || 0;
+  const totalCredit = Number(ledger?.totalCredit ?? ledger?.totalPayment) || 0;
+  const entries = ledger?.entries || [];
+  const party = ledger?.customer || customer;
 
   return (
     <div className="space-y-4">
-      <Breadcrumbs items={[{ label: 'Ledger', to: '/ledger/party' }, { label: 'Party Ledger' }]} />
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 no-print">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Customer Ledger</h1>
-          <p className="text-sm text-muted mt-0.5">Roj Mel — detailed account statement</p>
-        </div>
-        {customer && (
+      <div className="no-print">
+        <Breadcrumbs items={[{ label: 'Ledger' }, { label: 'Party Ledger' }]} />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Party Ledger</h1>
+            <p className="text-sm text-muted">Live from backend · running balance</p>
+          </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleExport}>
-              <FaFileExport size={12} /> Export
-            </Button>
-            <Button variant="outline" size="sm" onClick={handlePrint}>
+            <Button variant="outline" size="sm" onClick={handlePrint} disabled={!customerId}>
               <FaPrint size={12} /> Print
             </Button>
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={!entries.length}>
+              <FaFileExport size={12} /> Export
+            </Button>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Filters */}
       <Card className="no-print">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <CardHeader title="Filters" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Dropdown
             label="Customer"
             value={customerId}
             onChange={handleCustomerChange}
-            options={customers.map((c) => ({ value: c.id, label: `${c.name} — ${c.businessName}` }))}
+            options={customers.map((c) => ({
+              value: String(c.id),
+              label: `${c.name}${c.businessName ? ` — ${c.businessName}` : ''}`,
+            }))}
             placeholder="Select customer"
           />
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Month</label>
-            <input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="w-full rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-            />
-          </div>
-          <DatePicker label="From Date" value={fromDate} onChange={setFromDate} />
-          <DatePicker label="To Date" value={toDate} onChange={setToDate} />
+          <DatePicker label="From" value={fromDate} onChange={setFromDate} />
+          <DatePicker label="To" value={toDate} onChange={setToDate} />
         </div>
       </Card>
 
@@ -151,27 +135,27 @@ export default function Ledger() {
           <EmptyState
             type="default"
             title="Select a customer"
-            description="Choose a customer from the dropdown above to view their ledger statement."
+            description="Choose a customer to load their ledger from the server."
           />
         </Card>
+      ) : loading ? (
+        <Card className="py-16 flex justify-center"><Loader /></Card>
       ) : (
         <>
-          {/* Summary */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { label: 'Opening Balance', value: ledgerEntries.openingBalance, color: 'text-slate-700' },
-              { label: 'Total Credit', value: ledgerEntries.totalCredit, color: 'text-blue-600' },
-              { label: 'Total Payments', value: ledgerEntries.totalPayment, color: 'text-emerald-600' },
-              { label: 'Closing Balance', value: ledgerEntries.closingBalance, color: 'text-amber-600' },
+              { label: 'Opening Balance', value: opening, color: 'text-slate-700' },
+              { label: 'Total Debit (Sales)', value: totalDebit, color: 'text-blue-600' },
+              { label: 'Total Credit (Payments)', value: totalCredit, color: 'text-emerald-600' },
+              { label: 'Closing Balance', value: closing, color: 'text-amber-600' },
             ].map((s) => (
               <Card key={s.label} className="text-center">
                 <p className="text-xs text-muted font-medium">{s.label}</p>
-                <p className={`text-xl font-bold mt-1 ${s.color} dark:text-inherit`}>{formatCurrency(s.value)}</p>
+                <p className={`text-xl font-bold mt-1 ${s.color}`}>{formatCurrency(s.value)}</p>
               </Card>
             ))}
           </div>
 
-          {/* Customer header for print */}
           <Card>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-border dark:border-slate-700">
               <div className="flex items-center gap-3">
@@ -179,22 +163,24 @@ export default function Ledger() {
                   <FaBook size={16} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">{customer.name}</h2>
-                  <p className="text-sm text-muted">{customer.businessName} · {customer.mobile}</p>
+                  <h2 className="text-lg font-bold text-slate-800 dark:text-white">{party?.name}</h2>
+                  <p className="text-sm text-muted">
+                    {party?.businessName} · {party?.mobile}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-xs text-muted">Current Balance</p>
-                <p className="text-xl font-bold text-amber-600">{formatCurrency(customer.currentBalance)}</p>
+                <p className="text-xl font-bold text-amber-600">
+                  {formatCurrency(party?.currentBalance ?? closing)}
+                </p>
               </div>
             </div>
 
-            {/* Ledger Timeline */}
-            {ledgerEntries.entries.length === 0 ? (
-              <EmptyState title="No entries" description="No ledger entries found for the selected filters." />
+            {entries.length === 0 ? (
+              <EmptyState title="No entries" description="No ledger entries for the selected filters." />
             ) : (
               <div className="space-y-0">
-                {/* Opening */}
                 <div className="flex gap-4 pb-4">
                   <div className="flex flex-col items-center">
                     <div className="w-3 h-3 rounded-full bg-slate-400 ring-4 ring-slate-100 dark:ring-slate-700" />
@@ -202,25 +188,26 @@ export default function Ledger() {
                   </div>
                   <div className="pb-2">
                     <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Opening Balance</p>
-                    <p className="text-lg font-bold text-slate-800 dark:text-white">{formatCurrency(ledgerEntries.openingBalance)}</p>
+                    <p className="text-lg font-bold text-slate-800 dark:text-white">{formatCurrency(opening)}</p>
                   </div>
                 </div>
 
-                {ledgerEntries.entries.map((entry, idx) => (
+                {entries.map((entry, idx) => (
                   <motion.div
                     key={entry.id}
                     initial={{ opacity: 0, x: -8 }}
                     animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.02 }}
+                    transition={{ delay: Math.min(idx * 0.02, 0.4) }}
                     className="flex gap-4"
                   >
                     <div className="flex flex-col items-center">
                       <div className={`w-3 h-3 rounded-full ring-4 ring-white dark:ring-slate-800 ${
-                        entry.type === 'credit' ? 'bg-blue-500' :
-                        entry.type === 'payment' ? 'bg-emerald-500' :
-                        entry.type === 'return' ? 'bg-amber-500' : 'bg-purple-500'
-                      }`} />
-                      {idx < ledgerEntries.entries.length - 1 && (
+                        entry.type === 'credit' ? 'bg-blue-500'
+                          : entry.type === 'payment' ? 'bg-emerald-500'
+                            : entry.type === 'return' ? 'bg-amber-500' : 'bg-purple-500'
+                      }`}
+                      />
+                      {idx < entries.length - 1 && (
                         <div className="w-0.5 flex-1 bg-border dark:bg-slate-700" />
                       )}
                     </div>
@@ -233,82 +220,30 @@ export default function Ledger() {
                             </Badge>
                             <span className="text-xs text-muted">{formatDate(entry.date)}</span>
                           </div>
-                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-1.5">{entry.itemDescription}</p>
-                          {entry.notes && <p className="text-xs text-muted mt-0.5">{entry.notes}</p>}
-                          <p className="text-xs text-muted mt-1">
-                            {entry.paymentMethod}
-                            {entry.quantity > 1 && ` · Qty: ${entry.quantity} × ${formatCurrency(entry.rate)}`}
+                          <p className="text-sm font-medium text-slate-800 dark:text-slate-100 mt-1.5">
+                            {entry.itemDescription || entry.description}
                           </p>
+                          {entry.notes && <p className="text-xs text-muted mt-0.5">{entry.notes}</p>}
+                          <p className="text-xs text-muted mt-1">{entry.paymentMethod}</p>
                         </div>
                         <div className="text-right shrink-0">
-                          {entry.credit > 0 && (
-                            <p className="text-sm font-bold text-blue-600">+{formatCurrency(entry.credit)}</p>
-                          )}
                           {entry.debit > 0 && (
-                            <p className="text-sm font-bold text-emerald-600">−{formatCurrency(entry.debit)}</p>
+                            <p className="text-sm font-bold text-blue-600">Dr {formatCurrency(entry.debit)}</p>
                           )}
-                          <p className="text-xs text-muted mt-1">Bal: {formatCurrency(entry.runningBalance)}</p>
+                          {entry.credit > 0 && (
+                            <p className="text-sm font-bold text-emerald-600">Cr {formatCurrency(entry.credit)}</p>
+                          )}
+                          <p className="text-xs text-muted mt-1">
+                            Bal {formatCurrency(entry.runningBalance ?? entry.balance)}
+                          </p>
                         </div>
                       </div>
                     </div>
                   </motion.div>
                 ))}
-
-                {/* Closing */}
-                <div className="flex gap-4 pt-2">
-                  <div className="flex flex-col items-center">
-                    <div className="w-3 h-3 rounded-full bg-amber-500 ring-4 ring-amber-100 dark:ring-amber-900/40" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Closing Balance</p>
-                    <p className="text-xl font-bold text-amber-600">{formatCurrency(ledgerEntries.closingBalance)}</p>
-                  </div>
-                </div>
               </div>
             )}
           </Card>
-
-          {/* Traditional table view */}
-          {ledgerEntries.entries.length > 0 && (
-            <Card>
-              <CardHeader title="Ledger Statement (Table View)" />
-              <div className="overflow-x-auto scrollbar-thin -mx-1 min-w-0">
-                <table className="w-full min-w-[520px] text-sm">
-                  <thead>
-                    <tr className="border-b border-border dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30">
-                      {['Date', 'Particulars', 'Type', 'Credit (Dr)', 'Payment (Cr)', 'Balance'].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted uppercase tracking-wider">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60 dark:divide-slate-700/60">
-                    <tr className="bg-slate-50/50 dark:bg-slate-700/20">
-                      <td className="px-4 py-3 text-sm" colSpan={3}>Opening Balance</td>
-                      <td className="px-4 py-3 text-sm">—</td>
-                      <td className="px-4 py-3 text-sm">—</td>
-                      <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(ledgerEntries.openingBalance)}</td>
-                    </tr>
-                    {ledgerEntries.entries.map((e) => (
-                      <tr key={e.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/40">
-                        <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-300">{formatDate(e.date)}</td>
-                        <td className="px-4 py-3 text-sm text-slate-700 dark:text-slate-200">{e.itemDescription}</td>
-                        <td className="px-4 py-3 text-sm">{TRANSACTION_TYPES[e.type]?.label || e.type}</td>
-                        <td className="px-4 py-3 text-sm font-medium text-blue-600">{e.credit ? formatCurrency(e.credit) : '—'}</td>
-                        <td className="px-4 py-3 text-sm font-medium text-emerald-600">{e.debit ? formatCurrency(e.debit) : '—'}</td>
-                        <td className="px-4 py-3 text-sm font-semibold">{formatCurrency(e.runningBalance)}</td>
-                      </tr>
-                    ))}
-                    <tr className="bg-amber-50/50 dark:bg-amber-900/10 font-semibold">
-                      <td className="px-4 py-3 text-sm" colSpan={3}>Closing Balance</td>
-                      <td className="px-4 py-3 text-sm text-blue-600">{formatCurrency(ledgerEntries.totalCredit)}</td>
-                      <td className="px-4 py-3 text-sm text-emerald-600">{formatCurrency(ledgerEntries.totalPayment)}</td>
-                      <td className="px-4 py-3 text-sm text-amber-600">{formatCurrency(ledgerEntries.closingBalance)}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          )}
         </>
       )}
     </div>

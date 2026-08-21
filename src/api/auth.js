@@ -19,7 +19,8 @@ export async function login(email, password) {
   setTokens({ access: data.access, refresh: data.refresh });
   const user = normalizeUser(data.user);
   setStoredUser(user);
-  return user;
+  const msg = data.apiMessage || data.message || data.detail || 'Login successful';
+  return { ...user, detail: msg, message: msg, apiMessage: msg };
 }
 
 export async function register(payload) {
@@ -27,7 +28,8 @@ export async function register(payload) {
   setTokens({ access: data.access, refresh: data.refresh });
   const user = normalizeUser(data.user);
   setStoredUser(user);
-  return user;
+  const msg = data.apiMessage || data.message || data.detail || 'Account created successfully';
+  return { ...user, detail: msg, message: msg, apiMessage: msg };
 }
 
 export async function fetchMe() {

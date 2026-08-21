@@ -4,6 +4,7 @@ import { FaArrowLeft } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { Breadcrumbs, Card, Input, Button } from '../../components/ui';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const initial = {
   name: '',
@@ -45,10 +46,10 @@ export default function AddCustomer() {
         ...form,
         creditLimit: Number(form.creditLimit) || 0,
       });
-      toast.success('Customer added successfully');
+      toast.success(getApiMessage(customer, 'Customer added successfully'));
       navigate(`/customers/${customer.id}`);
     } catch (err) {
-      toast.error(err.message || 'Failed to add customer');
+      toast.error(getApiErrorMessage(err, 'Failed to add customer'));
     } finally {
       setLoading(false);
     }

@@ -3,6 +3,25 @@ const API_BASE = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
 const TOKEN_KEY = 'dlms_tokens';
 const USER_KEY = 'dlms_auth';
+const ACTIVE_COMPANY_KEY = 'dlms_active_company_id';
+
+export function getActiveCompanyId() {
+  try {
+    return localStorage.getItem(ACTIVE_COMPANY_KEY) || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveCompanyId(id) {
+  try {
+    if (id == null || id === '') localStorage.removeItem(ACTIVE_COMPANY_KEY);
+    else localStorage.setItem(ACTIVE_COMPANY_KEY, String(id));
+    window.dispatchEvent(new Event('dlms-company-changed'));
+  } catch {
+    /* ignore */
+  }
+}
 
 export function getApiBase() {
   return API_BASE;
@@ -65,8 +84,9 @@ class ApiError extends Error {
 function pickErrorMessage(data, status) {
   if (!data) return `Request failed (${status})`;
   if (typeof data === 'string') return data;
+  if (typeof data.message === 'string' && data.message.trim()) return data.message;
   if (data.detail) return typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
-  const first = Object.entries(data).find(([, v]) => v != null);
+  const first = Object.entries(data).find(([k, v]) => v != null && k !== 'detail' && k !== 'message' && k !== 'success');
   if (first) {
     const [k, v] = first;
     const msg = Array.isArray(v) ? v[0] : v;
@@ -166,6 +186,8 @@ async function request(path, options = {}, retry = true, attempt = 0) {
   if (auth) {
     const tokens = getTokens();
     if (tokens?.access) headers.Authorization = `Bearer ${tokens.access}`;
+    const companyId = getActiveCompanyId();
+    if (companyId) headers['X-Company-Id'] = String(companyId);
   }
 
   const url = resolveUrl(path);
@@ -220,6 +242,38 @@ async function request(path, options = {}, retry = true, attempt = 0) {
   if (!res.ok) {
     throw new ApiError(pickErrorMessage(data, res.status), res.status, data);
   }
+
+  // Unwrap { success, message, data } without clobbering domain fields
+  // (e.g. Notification/ActivityLog already have a `message` field).
+  if (data && typeof data === 'object' && !Array.isArray(data) && data.success === true && 'data' in data) {
+    const toastMessage = typeof data.message === 'string' ? data.message : '';
+    const inner = data.data;
+
+    if (inner == null) {
+      return {
+        success: true,
+        message: toastMessage,
+        apiMessage: toastMessage,
+      };
+    }
+
+    if (typeof inner === 'object' && !Array.isArray(inner)) {
+      const hasOwnMessage = Object.prototype.hasOwnProperty.call(inner, 'message');
+      return {
+        ...inner,
+        apiMessage: toastMessage,
+        ...(hasOwnMessage ? {} : { message: toastMessage }),
+      };
+    }
+
+    return {
+      success: true,
+      message: toastMessage,
+      apiMessage: toastMessage,
+      data: inner,
+    };
+  }
+
   return data;
 }
 
@@ -249,3 +303,4 @@ export async function fetchAll(path) {
 }
 
 export { ApiError };
+export { getApiMessage, getApiErrorMessage } from '../utils/apiMessage';

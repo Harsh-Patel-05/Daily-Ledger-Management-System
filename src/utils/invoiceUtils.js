@@ -161,7 +161,7 @@ export function numberToWords(num) {
   const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
 
   const n = Math.floor(Math.abs(num));
-  if (n === 0) return 'Zero Rupees Only';
+  if (n === 0) return 'Indian Rupees Zero Only';
 
   const two = (x) => {
     if (x < 20) return a[x];
@@ -182,15 +182,198 @@ export function numberToWords(num) {
   if (lakh) str += `${three(lakh)} Lakh `;
   if (thousand) str += `${two(thousand)} Thousand `;
   if (rem) str += `${three(rem)} `;
-  return `${str.trim()} Rupees Only`;
+  return `Indian Rupees ${str.trim()} Only`;
+}
+
+/** Amount like 6,600.00 (Tally invoice style, no ₹). */
+export function formatInvoiceAmount(amount) {
+  return new Intl.NumberFormat('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0);
+}
+
+/** GSTIN first 2 digits → state code. */
+export function gstinStateCode(gstin = '') {
+  const g = String(gstin || '').trim().toUpperCase();
+  return /^\d{2}/.test(g) ? g.slice(0, 2) : '';
+}
+
+const GST_STATE_NAMES = {
+  '01': 'Jammu & Kashmir', '02': 'Himachal Pradesh', '03': 'Punjab', '04': 'Chandigarh',
+  '05': 'Uttarakhand', '06': 'Haryana', '07': 'Delhi', '08': 'Rajasthan',
+  '09': 'Uttar Pradesh', '10': 'Bihar', '11': 'Sikkim', '12': 'Arunachal Pradesh',
+  '13': 'Nagaland', '14': 'Manipur', '15': 'Mizoram', '16': 'Tripura',
+  '17': 'Meghalaya', '18': 'Assam', '19': 'West Bengal', '20': 'Jharkhand',
+  '21': 'Odisha', '22': 'Chhattisgarh', '23': 'Madhya Pradesh', '24': 'Gujarat',
+  '27': 'Maharashtra', '29': 'Karnataka', '32': 'Kerala', '33': 'Tamil Nadu',
+  '36': 'Telangana', '37': 'Andhra Pradesh',
+};
+
+export function stateNameFromGstin(gstin = '') {
+  const code = gstinStateCode(gstin);
+  return GST_STATE_NAMES[code] || '';
+}
+
+/** Normalize state label for compare (MP / Madhya Pradesh → MADHYA PRADESH). */
+export function normalizeStateName(state = '') {
+  const s = String(state || '').trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!s) return '';
+  if (s === 'MP' || s.includes('MADHYA')) return 'MADHYA PRADESH';
+  if (s === 'GJ' || s.includes('GUJARAT')) return 'GUJARAT';
+  if (s === 'MH' || s.includes('MAHARASHTRA')) return 'MAHARASHTRA';
+  return s;
+}
+
+/** Build clean party address without duplicated city/state/pin. */
+export function formatPartyAddress({
+  line1 = '',
+  line2 = '',
+  city = '',
+  state = '',
+  pincode = '',
+  fallback = '',
+} = {}) {
+  const parts = [];
+  const push = (v) => {
+    const s = String(v || '').trim();
+    if (!s) return;
+    const joined = parts.join(', ').toLowerCase();
+    if (joined.includes(s.toLowerCase())) return;
+    parts.push(s);
+  };
+
+  push(line1);
+  push(line2);
+
+  const blob = parts.join(', ').toLowerCase();
+  // Line already has pin or city shorthand — don't append conflicting city/state
+  const lineComplete = /\b\d{6}\b/.test(blob) || /\b(indore|vadodara|mumbai|delhi|ahmedabad|surat|pune)\b/i.test(blob);
+
+  if (!lineComplete) {
+    const cityOk = city && !blob.includes(String(city).toLowerCase());
+    const stateOk = state && !blob.includes(String(state).toLowerCase())
+      && !(normalizeStateName(state) === 'MADHYA PRADESH' && /\b(mp|m\.p\.)\b/i.test(blob));
+    const pinOk = pincode && !blob.includes(String(pincode));
+
+    if (cityOk && stateOk && pinOk) {
+      parts.push(`${city}, ${state} ${pincode}`.trim());
+    } else {
+      if (cityOk) push(city);
+      if (stateOk) push(state);
+      if (pinOk) push(pincode);
+    }
+  }
+
+  const out = parts.join(', ').replace(/\s+,/g, ',').replace(/,\s*,/g, ', ').trim();
+  return out || String(fallback || '').trim();
+}
+
+/** Destination city — skip state-only tokens like MP / GJ. */
+export function inferDestination(address = '', city = '', placeOfSupply = '') {
+  if (city && !/^(mp|gj|mh|dl|up|hr|rj)$/i.test(String(city).trim())) {
+    return String(city).trim();
+  }
+  const bits = String(address || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const skip = /^(mp|m\.p\.|gj|gujarat|madhya pradesh|maharashtra|india|\d{6})$/i;
+  for (let i = bits.length - 1; i >= 0; i -= 1) {
+    if (!skip.test(bits[i]) && bits[i].length > 2) return bits[i];
+  }
+  const pos = String(placeOfSupply || '').trim();
+  if (pos && !skip.test(pos)) return pos;
+  return '';
+}
+
+/**
+ * Interstate = different GST state.
+ * Prefer GSTIN codes; else state_code; else state name.
+ */
+export function resolveInterstate({
+  sellerGstin = '',
+  buyerGstin = '',
+  sellerState = '',
+  buyerState = '',
+  sellerStateCode = '',
+  buyerStateCode = '',
+  savedFlag = false,
+} = {}) {
+  const pickCode = (gstin, stateCode) => {
+    const fromGst = gstinStateCode(gstin);
+    if (fromGst) return fromGst;
+    const sc = String(stateCode || '').trim();
+    if (/^\d{1,2}$/.test(sc)) return sc.padStart(2, '0');
+    return '';
+  };
+  const sc = pickCode(sellerGstin, sellerStateCode);
+  const bc = pickCode(buyerGstin, buyerStateCode);
+  if (sc && bc) return sc !== bc;
+
+  const sn = normalizeStateName(sellerState);
+  const bn = normalizeStateName(buyerState);
+  if (sn && bn) return sn !== bn;
+
+  return Boolean(savedFlag);
+}
+
+/** Short date: 18-Jun-26 */
+export function formatInvoiceDate(date) {
+  if (!date) return '';
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return String(date);
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day = String(d.getDate()).padStart(2, '0');
+  const yy = String(d.getFullYear()).slice(-2);
+  return `${day}-${months[d.getMonth()]}-${yy}`;
 }
 
 export function calcInvoiceTotals(items = [], discount = 0, taxRate = 18) {
   const subtotal = items.reduce((s, i) => s + (Number(i.amount) || Number(i.quantity) * Number(i.rate) || 0), 0);
   const afterDiscount = Math.max(0, subtotal - Number(discount || 0));
-  const taxAmount = Math.round((afterDiscount * Number(taxRate || 0)) / 100);
+  const taxAmount = Math.round((afterDiscount * Number(taxRate || 0)) / 100 * 100) / 100;
   const total = afterDiscount + taxAmount;
   return { subtotal, discount: Number(discount || 0), taxRate: Number(taxRate || 0), taxAmount, total };
+}
+
+/** GST vs Non-GST + intra/inter-state CGST/SGST/IGST split (Munim-style). */
+export function calcGstBreakup({
+  items = [],
+  discount = 0,
+  taxRate = 18,
+  gstType = 'GST',
+  isInterstate = false,
+} = {}) {
+  const gst = gstType !== 'Non-GST';
+  const rate = gst ? Number(taxRate || 0) : 0;
+  const base = calcInvoiceTotals(items, discount, rate);
+  if (!gst || base.taxAmount <= 0) {
+    return {
+      ...base,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      igstAmount: 0,
+      isInterstate: Boolean(isInterstate),
+    };
+  }
+  if (isInterstate) {
+    return {
+      ...base,
+      cgstAmount: 0,
+      sgstAmount: 0,
+      igstAmount: base.taxAmount,
+      isInterstate: true,
+    };
+  }
+  const half = Math.round((base.taxAmount / 2) * 100) / 100;
+  return {
+    ...base,
+    cgstAmount: half,
+    sgstAmount: Math.round((base.taxAmount - half) * 100) / 100,
+    igstAmount: 0,
+    isInterstate: false,
+  };
 }
 
 export function isGstSale(invoice) {

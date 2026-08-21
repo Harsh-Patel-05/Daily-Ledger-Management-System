@@ -9,13 +9,12 @@ import {
   monthlyTrendFromAnalytics,
   outstandingTrendFromMonthly,
   topCustomersFromAnalytics,
-  topProductsFromInvoices,
 } from '../utils/reportBuilders';
 import { formatCurrency } from '../utils/formatters';
 import { Breadcrumbs, Card, CardHeader, StatCard } from '../components/ui';
 
 export default function Analytics() {
-  const { analyticsData, stats, customers, invoices } = useApp();
+  const { analyticsData, stats, customers } = useApp();
 
   const monthly = useMemo(
     () => monthlyTrendFromAnalytics(analyticsData),
@@ -40,8 +39,8 @@ export default function Analytics() {
         revenue: Number(p.revenue) || 0,
       }));
     }
-    return topProductsFromInvoices(invoices);
-  }, [analyticsData, invoices]);
+    return [];
+  }, [analyticsData]);
 
   return (
     <div className="space-y-6">

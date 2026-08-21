@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import { Breadcrumbs, Card, CardHeader, Avatar, Input, Button } from '../components/ui';
 import { formatPhone, formatDate } from '../utils/formatters';
 import { DEFAULT_LOGO } from '../assets/defaultLogo';
+import { getApiMessage, getApiErrorMessage } from '../utils/apiMessage';
 
 export default function Profile() {
   const { profile, setProfile, uploadLogo } = useApp();
@@ -39,10 +40,10 @@ export default function Profile() {
     }
     setLogoUploading(true);
     try {
-      await uploadLogo(file);
-      toast.success('Photo updated — it will appear on invoices too');
+      const saved = await uploadLogo(file);
+      toast.success(getApiMessage(saved, 'Photo updated successfully'));
     } catch (err) {
-      toast.error(err.message || 'Upload failed');
+      toast.error(getApiErrorMessage(err, 'Upload failed'));
     } finally {
       setLogoUploading(false);
     }
@@ -51,11 +52,11 @@ export default function Profile() {
   const handleSaveProfile = async () => {
     setSaving(true);
     try {
-      await setProfile(form);
+      const saved = await setProfile(form);
       setEditMode(false);
-      toast.success('Profile updated successfully');
+      toast.success(getApiMessage(saved, 'Profile updated successfully'));
     } catch (err) {
-      toast.error(err.message || 'Failed to save profile');
+      toast.error(getApiErrorMessage(err, 'Failed to save profile'));
     } finally {
       setSaving(false);
     }
@@ -77,15 +78,15 @@ export default function Profile() {
     }
     setPassLoading(true);
     try {
-      await changePassword({
+      const res = await changePassword({
         current_password: passwords.current,
         new_password: passwords.newPass,
         confirm_password: passwords.confirm,
       });
       setPasswords({ current: '', newPass: '', confirm: '' });
-      toast.success('Password changed successfully');
+      toast.success(getApiMessage(res, 'Password changed successfully'));
     } catch (err) {
-      toast.error(err.message || 'Password change failed');
+      toast.error(getApiErrorMessage(err, 'Password change failed'));
     } finally {
       setPassLoading(false);
     }
@@ -214,10 +215,10 @@ export default function Profile() {
                       disabled={logoUploading}
                       onClick={async () => {
                         try {
-                          await setProfile({ ...profile, logo: null });
-                          toast.success('Reverted to default logo');
+                          const __apiRes = await setProfile({ ...profile, logo: null });
+                          toast.success(getApiMessage(__apiRes, 'Reverted to default logo'));
                         } catch (err) {
-                          toast.error(err.message || 'Reset failed');
+                          toast.error(getApiErrorMessage(err, 'Reset failed'));
                         }
                       }}
                     >

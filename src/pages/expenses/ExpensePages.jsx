@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import CrudListPage from '../../components/pages/CrudListPage';
 import ReportPage from '../../components/pages/ReportPage';
 import { useLocalModules } from '../../context/LocalModulesContext';
+import { useCompanies } from '../../context/CompaniesContext';
+import { getReports } from '../../api/core';
 import { formatCurrency, formatDate } from '../../utils/formatters';
-import { Table } from '../../components/ui';
+import { Table, Loader } from '../../components/ui';
 
 export function ExpenseCategories() {
   const { expenseCategories } = useLocalModules();
@@ -13,7 +15,6 @@ export function ExpenseCategories() {
       subtitle="Used when adding expenses"
       breadcrumbs={[{ label: 'Expenses', to: '/expenses' }, { label: 'Expense Categories' }]}
       externalCollection={expenseCategories}
-      storageKey="__expense_categories_ui"
       addLabel="Add Category"
       searchKeys={['name', 'description']}
       fields={[
@@ -49,7 +50,6 @@ export function ExpenseList() {
       subtitle="Shop expenses · GST and Non-GST"
       breadcrumbs={[{ label: 'Expenses', to: '/expenses' }, { label: 'Expenses' }]}
       externalCollection={expenses}
-      storageKey="__expenses_ui"
       onCreate={addExpense}
       addLabel="Add Expense"
       searchKeys={['categoryName', 'notes', 'paymentMode']}
@@ -59,8 +59,9 @@ export function ExpenseList() {
           key: 'categoryName',
           label: 'Category',
           type: 'select',
-          options: categoryOptions.length ? categoryOptions : [{ value: 'Miscellaneous', label: 'Miscellaneous' }],
+          options: categoryOptions,
           required: true,
+          placeholder: categoryOptions.length ? 'Select category' : 'Add a category first',
         },
         { key: 'amount', label: 'Amount', type: 'number', required: true },
         {
@@ -103,41 +104,53 @@ export function ExpenseList() {
 }
 
 export function ExpenseReports() {
-  const { expenses } = useLocalModules();
-  const items = expenses.items;
+  const { activeCompany } = useCompanies();
+  const [rows, setRows] = useState([]);
+  const [summary, setSummary] = useState({ totalExpenses: 0, entries: 0 });
+  const [loading, setLoading] = useState(true);
 
-  const byCategory = useMemo(() => {
-    const map = {};
-    items.forEach((e) => {
-      const key = e.categoryName || 'Other';
-      map[key] = (map[key] || 0) + (Number(e.amount) || 0);
-    });
-    return Object.entries(map).map(([category, amount]) => ({ id: category, category, amount }));
-  }, [items]);
-
-  const total = items.reduce((s, e) => s + (Number(e.amount) || 0), 0);
-  const gstTotal = items
-    .filter((e) => e.gstType === 'GST' || e.gstApplicable === true)
-    .reduce((s, e) => s + (Number(e.amount) || 0), 0);
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    getReports({ type: 'expenses' })
+      .then((res) => {
+        if (cancelled) return;
+        setRows(res?.rows || []);
+        setSummary(res?.summary || { totalExpenses: 0, entries: 0 });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRows([]);
+          setSummary({ totalExpenses: 0, entries: 0 });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeCompany?.id]);
 
   return (
     <ReportPage
       title="Expense Reports"
       breadcrumbs={[{ label: 'Expenses', to: '/expenses' }, { label: 'Expense Reports' }]}
       stats={[
-        { label: 'Total Expenses', value: total, currency: true, color: 'red' },
-        { label: 'GST Expenses', value: gstTotal, currency: true, color: 'amber' },
-        { label: 'Non-GST', value: total - gstTotal, currency: true, color: 'blue' },
-        { label: 'Entries', value: items.length, color: 'purple' },
+        { label: 'Total Expenses', value: summary.totalExpenses, currency: true, color: 'red' },
+        { label: 'Entries', value: summary.entries, color: 'purple' },
       ]}
     >
-      <Table
-        columns={[
-          { key: 'category', label: 'Category' },
-          { key: 'amount', label: 'Amount', render: (v) => formatCurrency(v) },
-        ]}
-        data={byCategory}
-      />
+      {loading ? (
+        <div className="py-12 flex justify-center"><Loader /></div>
+      ) : (
+        <Table
+          columns={[
+            { key: 'categoryName', label: 'Category' },
+            { key: 'count', label: 'Entries' },
+            { key: 'total', label: 'Amount', render: (v) => formatCurrency(v) },
+          ]}
+          data={rows}
+        />
+      )}
     </ReportPage>
   );
 }

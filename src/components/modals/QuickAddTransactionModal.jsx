@@ -9,6 +9,7 @@ import Input from '../ui/Input';
 import Dropdown from '../ui/Dropdown';
 import DatePicker from '../ui/DatePicker';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function QuickAddTransactionModal() {
   const { current, closeModal, openModal } = useModal();
@@ -107,7 +108,7 @@ export default function QuickAddTransactionModal() {
 
     setLoading(true);
     try {
-      await addTransaction({
+      const __apiRes = await addTransaction({
         date: form.date,
         customerId: form.type === 'expense' ? null : (form.customerId || customers[0]?.id),
         type: form.type,
@@ -118,10 +119,10 @@ export default function QuickAddTransactionModal() {
         notes: form.notes,
         paymentMethod: form.paymentMethod,
       });
-      toast.success('Transaction saved');
+      toast.success(getApiMessage(__apiRes, 'Transaction saved'));
       closeModal();
     } catch (err) {
-      toast.error(err.message || 'Failed to save');
+      toast.error(getApiErrorMessage(err, 'Failed to save'));
     } finally {
       setLoading(false);
     }

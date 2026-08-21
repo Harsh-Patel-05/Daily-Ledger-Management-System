@@ -8,6 +8,8 @@ import { useDebounce } from '../../hooks/useDebounce';
 import { usePagination } from '../../hooks/usePagination';
 import { formatDate, formatNumber } from '../../utils/formatters';
 import { filterBySearch } from '../../utils/helpers';
+import { booksList } from '../../api/books';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Breadcrumbs, Card, CardHeader, SearchBox, Filter, Table, Pagination,
   Button, Input, Modal, EmptyState,
@@ -15,6 +17,7 @@ import {
 
 const initialForm = {
   productId: '',
+  godownId: '',
   type: 'in',
   quantity: '',
   newQty: '',
@@ -35,9 +38,14 @@ export default function StockMovements() {
   const [typeFilter, setTypeFilter] = useState('');
   const [open, setOpen] = useState(!!preselect);
   const [form, setForm] = useState({ ...initialForm, productId: preselect });
+  const [godowns, setGodowns] = useState([]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const debouncedSearch = useDebounce(search);
+
+  useEffect(() => {
+    booksList('godowns').then((d) => setGodowns(Array.isArray(d) ? d : d?.results || [])).catch(() => setGodowns([]));
+  }, []);
 
   useEffect(() => {
     if (preselect) {
@@ -100,7 +108,7 @@ export default function StockMovements() {
 
     setLoading(true);
     try {
-      await recordStockMovement({
+      const __apiRes = await recordStockMovement({
         productId: form.productId,
         type: form.type,
         quantity: Number(form.quantity),
@@ -109,10 +117,10 @@ export default function StockMovements() {
         reference: form.reference,
         date: form.date,
       });
-      toast.success('Stock updated');
+      toast.success(getApiMessage(__apiRes, 'Stock updated'));
       closeModal();
     } catch (err) {
-      toast.error(err.message || 'Failed to update stock');
+      toast.error(getApiErrorMessage(err, 'Failed to update stock'));
     } finally {
       setLoading(false);
     }
@@ -188,11 +196,11 @@ export default function StockMovements() {
         <Button onClick={openModal}><FaPlus size={12} /> Record Movement</Button>
       </div>
 
-      {(stats.lowStockItems.length > 0 || stats.outOfStockItems.length > 0) && (
+      {(stats.lowStockItems?.length > 0 || stats.outOfStockItems?.length > 0) && (
         <Card>
           <CardHeader title="Stock Alerts" />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {stats.outOfStockItems.slice(0, 4).map((p) => (
+            {(stats.outOfStockItems || []).slice(0, 4).map((p) => (
               <Link
                 key={p.id}
                 to={`/inventory/${p.id}`}
@@ -205,7 +213,7 @@ export default function StockMovements() {
                 <span className="text-sm font-bold text-red-600">0</span>
               </Link>
             ))}
-            {stats.lowStockItems.slice(0, 4).map((p) => (
+            {(stats.lowStockItems || []).slice(0, 4).map((p) => (
               <Link
                 key={p.id}
                 to={`/inventory/${p.id}`}
@@ -290,6 +298,20 @@ export default function StockMovements() {
                 <FaExchangeAlt size={10} /> Current stock: {formatNumber(selectedProduct.stockQty)}
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">Godown</label>
+            <select
+              value={form.godownId}
+              onChange={set('godownId')}
+              className="w-full rounded-xl border border-border bg-white dark:bg-slate-800 dark:border-slate-600 dark:text-slate-100 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">Default (Main Godown)</option>
+              {godowns.map((g) => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
           </div>
 
           <div>

@@ -6,6 +6,7 @@ import { useToast } from '../../context/ToastContext';
 import PageHeader from '../../components/pages/PageHeader';
 import { Card, CardHeader, Button, Input, Dropdown, EmptyState } from '../../components/ui';
 import { formatNumber } from '../../utils/formatters';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function StockAdjustment() {
   const { products, recordStockMovement, getProduct } = useInventory();
@@ -48,7 +49,7 @@ export default function StockAdjustment() {
 
     setLoading(true);
     try {
-      await recordStockMovement({
+      const __apiRes = await recordStockMovement({
         productId: form.productId,
         type: 'adjust',
         newQty: Number(form.newQty),
@@ -56,10 +57,10 @@ export default function StockAdjustment() {
         date: form.date,
         reference: 'STOCK-ADJ',
       });
-      toast.success('Stock adjusted');
+      toast.success(getApiMessage(__apiRes, 'Stock adjusted'));
       setForm((f) => ({ ...f, newQty: '', reason: '' }));
     } catch (err) {
-      toast.error(err.message || 'Adjustment failed');
+      toast.error(getApiErrorMessage(err, 'Adjustment failed'));
     } finally {
       setLoading(false);
     }

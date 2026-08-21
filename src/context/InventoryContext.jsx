@@ -89,7 +89,11 @@ export function InventoryProvider({ children }) {
       if (isAuthenticated) refreshAll().catch(() => {});
     };
     window.addEventListener('dlms:refresh-inventory', onRefresh);
-    return () => window.removeEventListener('dlms:refresh-inventory', onRefresh);
+    window.addEventListener('dlms-company-changed', onRefresh);
+    return () => {
+      window.removeEventListener('dlms:refresh-inventory', onRefresh);
+      window.removeEventListener('dlms-company-changed', onRefresh);
+    };
   }, [isAuthenticated, refreshAll]);
 
   const getCategory = useCallback(
@@ -138,9 +142,10 @@ export function InventoryProvider({ children }) {
   }, []);
 
   const deleteCategory = useCallback(async (id) => {
-    await inventoryApi.deleteCategory(id);
+    const res = await inventoryApi.deleteCategory(id);
     setCategories((prev) => prev.filter((c) => !sameId(c.id, id)));
     refreshStats();
+    return res;
   }, [refreshStats]);
 
   const addBrand = useCallback(async (data) => {
@@ -157,9 +162,10 @@ export function InventoryProvider({ children }) {
   }, []);
 
   const deleteBrand = useCallback(async (id) => {
-    await inventoryApi.deleteBrand(id);
+    const res = await inventoryApi.deleteBrand(id);
     setBrands((prev) => prev.filter((b) => !sameId(b.id, id)));
     refreshStats();
+    return res;
   }, [refreshStats]);
 
   const addSupplier = useCallback(async (data) => {
@@ -176,12 +182,13 @@ export function InventoryProvider({ children }) {
   }, []);
 
   const deleteSupplier = useCallback(async (id) => {
-    await inventoryApi.deleteSupplier(id);
+    const res = await inventoryApi.deleteSupplier(id);
     setSuppliers((prev) => prev.filter((s) => !sameId(s.id, id)));
     setProducts((prev) =>
       prev.map((p) => (sameId(p.supplierId, id) ? { ...p, supplierId: '' } : p))
     );
     refreshStats();
+    return res;
   }, [refreshStats]);
 
   const addProduct = useCallback(async (data) => {
@@ -201,10 +208,11 @@ export function InventoryProvider({ children }) {
   }, [refreshStats]);
 
   const deleteProduct = useCallback(async (id) => {
-    await inventoryApi.deleteProduct(id);
+    const res = await inventoryApi.deleteProduct(id);
     setProducts((prev) => prev.filter((p) => !sameId(p.id, id)));
     setMovements((prev) => prev.filter((m) => !sameId(m.productId, id)));
     await refreshStats();
+    return res;
   }, [refreshStats]);
 
   const recordStockMovement = useCallback(async (data) => {

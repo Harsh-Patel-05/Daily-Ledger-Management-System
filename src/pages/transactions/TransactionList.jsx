@@ -10,7 +10,7 @@ import { filterBySearch, TRANSACTION_TYPES } from '../../utils/helpers';
 import { exportToCsv, transactionsToCsvRows } from '../../utils/exportCsv';
 import {
   Breadcrumbs, Card, SearchBox, Filter, Table, Pagination,
-  Button, Badge, FloatingAddButton, EmptyState, ExportButton, DatePicker,
+  Button, Badge, EmptyState, ExportButton, DatePicker,
 } from '../../components/ui';
 
 export default function TransactionList() {
@@ -153,8 +153,6 @@ export default function TransactionList() {
           </>
         )}
       </Card>
-
-      <FloatingAddButton to="/transactions/add" label="New Transaction" />
     </div>
   );
 }

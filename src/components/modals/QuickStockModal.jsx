@@ -7,6 +7,7 @@ import { formatNumber } from '../../utils/formatters';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import Button from '../ui/Button';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const initial = {
   productId: '',
@@ -59,7 +60,7 @@ export default function QuickStockModal() {
 
     setLoading(true);
     try {
-      await recordStockMovement({
+      const __apiRes = await recordStockMovement({
         productId: form.productId,
         type: form.type,
         quantity: Number(form.quantity),
@@ -68,10 +69,10 @@ export default function QuickStockModal() {
         reference: form.reference,
         date: form.date,
       });
-      toast.success('Stock updated');
+      toast.success(getApiMessage(__apiRes, 'Stock updated'));
       closeModal();
     } catch (err) {
-      toast.error(err.message || 'Failed to update stock');
+      toast.error(getApiErrorMessage(err, 'Failed to update stock'));
     } finally {
       setLoading(false);
     }

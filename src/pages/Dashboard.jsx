@@ -49,7 +49,7 @@ export default function Dashboard() {
   const recentTxs = transactions.slice(0, 6);
   const recentActivity = notifications.slice(0, 5);
   const unpaidInvoices = invoices.filter((i) => i.status !== 'paid').slice(0, 5);
-  const stockAlerts = [...invStats.outOfStockItems, ...invStats.lowStockItems].slice(0, 5);
+  const stockAlerts = [...(invStats?.outOfStockItems || []), ...(invStats?.lowStockItems || [])].slice(0, 5);
 
   const chartMonthly = useMemo(
     () => monthlyTrendFromAnalytics(analyticsData),

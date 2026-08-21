@@ -52,15 +52,8 @@ export function topCustomersFromAnalytics(analyticsData, customers = []) {
       transactions: c.transactions || 0,
     }));
   }
-  return [...customers]
-    .filter((c) => Number(c.currentBalance) > 0)
-    .sort((a, b) => Number(b.currentBalance) - Number(a.currentBalance))
-    .slice(0, 5)
-    .map((c) => ({
-      name: c.name,
-      amount: Number(c.currentBalance) || 0,
-      transactions: 0,
-    }));
+  // No client-side fake rollup — wait for analytics API
+  return [];
 }
 
 export function topProductsFromInvoices(invoices = []) {

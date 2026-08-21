@@ -1,26 +1,25 @@
 import { useMemo, useState, useEffect } from 'react';
 import { FaPlus, FaEdit, FaTrash } from 'react-icons/fa';
-import { useLocalCollection } from '../../hooks/useLocalCollection';
+import { useApiCollection } from '../../hooks/useApiCollection';
 import { useDebounce } from '../../hooks/useDebounce';
 import { usePagination } from '../../hooks/usePagination';
 import { useToast } from '../../context/ToastContext';
 import { filterBySearch } from '../../utils/helpers';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Card, SearchBox, Table, Pagination, Button, Input, Dropdown, Modal,
-  ConfirmationDialog, EmptyState, FloatingAddButton,
+  ConfirmationDialog, EmptyState,
 } from '../ui';
 import PageHeader from './PageHeader';
 
 /**
- * Generic frontend CRUD list for modules without backend yet.
- * fields: [{ key, label, type?: 'text'|'number'|'select'|'textarea', required?, options?, search? }]
+ * Generic CRUD list — always backed by backend API
+ * (apiResource → books API, or externalCollection from context).
  */
 export default function CrudListPage({
   title,
   subtitle,
   breadcrumbs,
-  storageKey,
-  seed = [],
   fields = [],
   columns,
   searchKeys = [],
@@ -30,18 +29,28 @@ export default function CrudListPage({
   getInitialForm,
   externalCollection,
   onCreate,
+  apiResource,
+  apiQuery = '',
+  mapRow,
+  toPayload,
 }) {
   const toast = useToast();
-  const local = useLocalCollection(
-    externalCollection ? null : (storageKey || 'dlms_unused'),
-    externalCollection ? [] : seed
-  );
-  const collection = externalCollection || local;
+  const api = useApiCollection(apiResource || null, {
+    query: apiQuery,
+    mapRow,
+    toPayload,
+    enabled: Boolean(apiResource) && !externalCollection,
+  });
+  const collection = externalCollection || (apiResource ? api : null);
+  if (!collection) {
+    throw new Error(`CrudListPage "${title}" requires apiResource or externalCollection (API-backed).`);
+  }
   const { items, add, update, remove } = collection;
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({});
   const [errors, setErrors] = useState({});
   const debouncedSearch = useDebounce(search);
@@ -49,7 +58,7 @@ export default function CrudListPage({
   const defaults = useMemo(() => {
     if (getInitialForm) return getInitialForm();
     return fields.reduce((acc, f) => {
-      acc[f.key] = f.defaultValue ?? (f.type === 'number' ? '' : f.type === 'select' ? (f.options?.[0]?.value ?? '') : '');
+      acc[f.key] = f.defaultValue ?? (f.type === 'number' ? '' : f.type === 'select' ? (f.options?.[0]?.value ?? f.options?.[0] ?? '') : '');
       return acc;
     }, {});
   }, [fields, getInitialForm]);
@@ -72,7 +81,10 @@ export default function CrudListPage({
   const openEdit = (row) => {
     setEditing(row);
     const next = { ...defaults };
-    fields.forEach((f) => { next[f.key] = row[f.key] ?? next[f.key]; });
+    fields.forEach((f) => {
+      if (f.key === 'password') next[f.key] = '';
+      else next[f.key] = row[f.key] ?? next[f.key];
+    });
     setForm(next);
     setErrors({});
     setOpen(true);
@@ -83,11 +95,12 @@ export default function CrudListPage({
     setForm((f) => ({ ...f, [key]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = {};
     fields.forEach((f) => {
-      if (f.required && !String(form[f.key] ?? '').trim()) {
+      const required = typeof f.required === 'function' ? f.required({ editing }) : f.required;
+      if (required && !String(form[f.key] ?? '').trim()) {
         errs[f.key] = `${f.label} is required`;
       }
     });
@@ -98,24 +111,37 @@ export default function CrudListPage({
     fields.forEach((f) => {
       if (f.type === 'number') payload[f.key] = Number(form[f.key]) || 0;
     });
+    if (editing && !payload.password) delete payload.password;
 
-    if (editing) {
-      update(editing.id, payload);
-      toast.success(`${title} updated`);
-    } else if (onCreate) {
-      onCreate(payload);
-      toast.success(`${title} added`);
-    } else {
-      add(payload);
-      toast.success(`${title} added`);
+    setSaving(true);
+    try {
+      let res;
+      if (editing) {
+        res = await update(editing.id, payload);
+        toast.success(getApiMessage(res, `${title} updated successfully`));
+      } else if (onCreate) {
+        res = await onCreate(payload);
+        toast.success(getApiMessage(res, `${title} created successfully`));
+      } else {
+        res = await add(payload);
+        toast.success(getApiMessage(res, `${title} created successfully`));
+      }
+      setOpen(false);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Save failed'));
+    } finally {
+      setSaving(false);
     }
-    setOpen(false);
   };
 
-  const handleDelete = () => {
-    remove(deleteId);
-    setDeleteId(null);
-    toast.success('Deleted');
+  const handleDelete = async () => {
+    try {
+      const res = await remove(deleteId);
+      setDeleteId(null);
+      toast.success(getApiMessage(res, 'Deleted successfully'));
+    } catch (err) {
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
+    }
   };
 
   const actionColumn = {
@@ -136,13 +162,18 @@ export default function CrudListPage({
   const tableColumns = columns
     ? (columns.some((c) => c.key === 'actions') ? columns : [...columns, actionColumn])
     : [
-      ...fields.slice(0, 4).map((f) => ({
+      ...fields.filter((f) => f.key !== 'password').slice(0, 4).map((f) => ({
         key: f.key,
         label: f.label,
         render: (v) => (f.type === 'number' ? v : (v || '—')),
       })),
       actionColumn,
     ];
+
+  const visibleFields = fields.filter((f) => {
+    if (typeof f.showWhen === 'function') return f.showWhen({ editing });
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -167,11 +198,9 @@ export default function CrudListPage({
         )}
       </Card>
 
-      <FloatingAddButton onClick={openCreate} />
-
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? `Edit ${title}` : `Add ${title}`}>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {fields.map((f) => {
+          {visibleFields.map((f) => {
             if (f.type === 'select') {
               return (
                 <Dropdown
@@ -181,6 +210,7 @@ export default function CrudListPage({
                   onChange={setField(f.key)}
                   options={f.options || []}
                   error={errors[f.key]}
+                  required={typeof f.required === 'function' ? f.required({ editing }) : f.required}
                 />
               );
             }
@@ -204,16 +234,18 @@ export default function CrudListPage({
               <Input
                 key={f.key}
                 label={f.label}
-                type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+                type={f.type === 'password' ? 'password' : f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
                 value={form[f.key] ?? ''}
                 onChange={setField(f.key)}
                 error={errors[f.key]}
+                placeholder={typeof f.placeholder === 'function' ? f.placeholder({ editing }) : f.placeholder}
+                required={typeof f.required === 'function' ? f.required({ editing }) : f.required}
               />
             );
           })}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit">{editing ? 'Update' : 'Save'}</Button>
+            <Button type="submit" loading={saving}>{editing ? 'Update' : 'Save'}</Button>
           </div>
         </form>
       </Modal>
@@ -222,8 +254,8 @@ export default function CrudListPage({
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
         onConfirm={handleDelete}
-        title="Delete record?"
-        message="This will remove the record from local storage."
+        title="Delete?"
+        message="This will permanently delete the record on the server."
       />
     </div>
   );

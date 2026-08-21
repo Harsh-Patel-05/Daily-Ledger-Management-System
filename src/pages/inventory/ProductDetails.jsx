@@ -9,6 +9,7 @@ import { useToast } from '../../context/ToastContext';
 import { STOCK_MOVEMENT_TYPES } from '../../data/inventoryDefaults';
 import { formatCurrency, formatDate, formatNumber } from '../../utils/formatters';
 import { getStatusColor } from '../../utils/helpers';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Breadcrumbs, Card, CardHeader, Button,
   ConfirmationDialog, StatCard,
@@ -49,11 +50,11 @@ export default function ProductDetails() {
 
   const handleDelete = async () => {
     try {
-      await deleteProduct(id);
-      toast.success('Product deleted');
+      const __apiRes = await deleteProduct(id);
+      toast.success(getApiMessage(__apiRes, 'Product deleted'));
       navigate('/inventory');
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
     }
   };
 
@@ -107,12 +108,46 @@ export default function ProductDetails() {
           </div>
 
           <div className="space-y-3 text-sm">
+            <InfoRow icon={FaTag} label="SKU" value={product.sku || '—'} />
+            <InfoRow icon={FaTag} label="Barcode" value={product.barcode || '—'} />
+            <InfoRow icon={FaTag} label="Unit" value={product.unitName || '—'} />
             <InfoRow icon={FaTag} label="Company / Brand" value={brand?.name || product.brand || '—'} />
             <InfoRow icon={FaTag} label="Category" value={category?.name || 'Uncategorized'} />
-            <InfoRow icon={FaTruck} label="Supplier" value={supplier?.name || '—'} />
+            <InfoRow icon={FaTag} label="Item Group" value={product.itemGroup || '—'} />
+            <InfoRow icon={FaTruck} label="Vendor" value={supplier?.name || '—'} />
             <InfoRow icon={FaTag} label="Purchase Date" value={product.purchaseDate ? formatDate(product.purchaseDate) : '—'} />
             <InfoRow icon={FaBoxOpen} label="Purchased Quantity" value={formatNumber(product.purchasedQuantity || 0)} />
           </div>
+
+          {(product.godownStocks || []).length > 0 && (
+            <div className="mt-5 pt-4 border-t border-border/60 dark:border-slate-700">
+              <p className="text-xs font-medium text-muted mb-2">Godown stock</p>
+              <ul className="space-y-1.5 text-sm">
+                {product.godownStocks.map((g) => (
+                  <li key={g.id || g.godownId} className="flex justify-between gap-2">
+                    <span className="text-slate-600 dark:text-slate-300">{g.godownName}</span>
+                    <span className="font-medium">{formatNumber(g.qty)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {(product.alternateUnits || []).length > 0 && (
+            <div className="mt-5 pt-4 border-t border-border/60 dark:border-slate-700">
+              <p className="text-xs font-medium text-muted mb-2">Alternate units</p>
+              <ul className="space-y-1.5 text-sm">
+                {product.alternateUnits.map((u) => (
+                  <li key={u.id || u.unitId} className="flex justify-between gap-2">
+                    <span className="text-slate-600 dark:text-slate-300">
+                      {u.unitName} (×{u.conversionFactor})
+                    </span>
+                    <span className="text-muted text-xs">{u.barcode || ''}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {product.description && (
             <div className="mt-5 pt-4 border-t border-border/60 dark:border-slate-700">

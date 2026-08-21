@@ -11,6 +11,7 @@ import { exportBackupJson } from '../utils/storage';
 import { ACCENT_PRESETS } from '../data/themePresets';
 import { Breadcrumbs, Card, CardHeader, Input, Dropdown, Button, ConfirmationDialog } from '../components/ui';
 import { cn } from '../utils/formatters';
+import { getApiMessage, getApiErrorMessage } from '../utils/apiMessage';
 
 const SETTINGS_TABS = [
   { id: 'business', label: 'Business' },
@@ -105,7 +106,7 @@ export default function Settings() {
       applyFromSettings(form);
       toast.success('Settings saved successfully');
     } catch (err) {
-      toast.error(err.message || 'Failed to save settings');
+      toast.error(getApiErrorMessage(err, 'Failed to save settings'));
     } finally {
       setLoading(false);
     }
@@ -446,11 +447,10 @@ export default function Settings() {
                 const sms = res?.ownerChannels?.sms;
                 if (email?.ok) toast.success(`Email sent to ${email.to}`);
                 else toast.error(`Email: ${email?.error || email?.reason || 'failed'}`);
-                if (sms?.ok && !sms?.demo) toast.success(`SMS sent to ${sms.to}`);
-                else if (sms?.demo) toast.info(`SMS demo only: ${sms.detail || 'check server'}`);
+                if (sms?.ok) toast.success(`SMS sent to ${sms.to}`);
                 else toast.error(`SMS: ${typeof sms?.error === 'string' ? sms.error : (sms?.reason || JSON.stringify(sms?.error) || 'failed')}`);
               } catch (err) {
-                toast.error(err.message || 'Test failed — restart Django after creating backend/.env');
+                toast.error(getApiErrorMessage(err, 'Test failed — restart Django after creating backend/.env'));
               } finally {
                 setTestingAlert(false);
               }
@@ -514,7 +514,7 @@ export default function Settings() {
             setShowReset(false);
             toast.success('Data refreshed from server');
           } catch (err) {
-            toast.error(err.message || 'Refresh failed');
+            toast.error(getApiErrorMessage(err, 'Refresh failed'));
           }
         }}
         title="Refresh from Server"

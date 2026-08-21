@@ -5,6 +5,7 @@ import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { TRANSACTION_TYPES, PAYMENT_METHODS } from '../../utils/helpers';
 import { Breadcrumbs, Card, Input, Dropdown, DatePicker, Button } from '../../components/ui';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function AddTransaction() {
   const { customers, addTransaction } = useApp();
@@ -60,7 +61,7 @@ export default function AddTransaction() {
 
     setLoading(true);
     try {
-      await addTransaction({
+      const __apiRes = await addTransaction({
         date: form.date,
         customerId: form.customerId || customers[0]?.id,
         type: form.type,
@@ -71,10 +72,10 @@ export default function AddTransaction() {
         notes: form.notes,
         paymentMethod: form.paymentMethod,
       });
-      toast.success('Transaction created successfully');
+      toast.success(getApiMessage(__apiRes, 'Transaction created successfully'));
       navigate('/transactions');
     } catch (err) {
-      toast.error(err.message || 'Failed to create transaction');
+      toast.error(getApiErrorMessage(err, 'Failed to create transaction'));
     } finally {
       setLoading(false);
     }

@@ -9,6 +9,7 @@ import { useToast } from '../../context/ToastContext';
 import { extractInvoiceFromImage, fileToDataUrl } from '../../utils/ocr';
 import { calcInvoiceTotals } from '../../utils/invoiceUtils';
 import { formatCurrency } from '../../utils/formatters';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Breadcrumbs, Card, CardHeader, Input, DatePicker, Button, Badge,
 } from '../../components/ui';
@@ -76,7 +77,7 @@ export default function UploadInvoice() {
       }
     } catch (err) {
       console.error(err);
-      toast.error(err.message || 'OCR failed — enter invoice details manually');
+      toast.error(getApiErrorMessage(err, 'OCR failed — enter invoice details manually'));
       setExtracted({
         invoiceNumber: '',
         date: new Date().toISOString().split('T')[0],
@@ -138,15 +139,16 @@ export default function UploadInvoice() {
           (extracted.customerMobile && c.mobile === extracted.customerMobile) ||
           c.name.toLowerCase() === extracted.customerName.toLowerCase()
       );
-      const { invoice } = await importInvoiceAsTransaction({
+      const __apiRes = await importInvoiceAsTransaction({
         ...extracted,
         customerId: matched?.id,
         customerBusiness: extracted.businessName,
       });
-      toast.success('Invoice imported — ledger & customer updated');
+      const { invoice } = __apiRes || {};
+      toast.success(getApiMessage(__apiRes, 'Invoice imported — ledger & customer updated'));
       navigate(`/invoices/${invoice.id}`);
     } catch (err) {
-      toast.error(err.message || 'Import failed');
+      toast.error(getApiErrorMessage(err, 'Import failed'));
     } finally {
       setSaving(false);
     }

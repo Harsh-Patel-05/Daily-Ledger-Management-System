@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const INITIAL = {
   name: '',
@@ -66,7 +67,7 @@ export default function SignUp() {
 
     setLoading(true);
     try {
-      await register({
+      const res = await register({
         name: form.name.trim(),
         email: form.email.trim(),
         mobile: form.mobile.trim(),
@@ -74,7 +75,7 @@ export default function SignUp() {
         password: form.password,
         confirm_password: form.confirm_password,
       });
-      toast.success('Account created successfully!');
+      toast.success(getApiMessage(res, 'Account created successfully'));
       navigate('/dashboard');
     } catch (err) {
       const data = err.data;
@@ -85,7 +86,7 @@ export default function SignUp() {
         }
         if (Object.keys(fieldErrs).length) setErrors(fieldErrs);
       }
-      toast.error(err.message || 'Sign up failed');
+      toast.error(getApiErrorMessage(err, 'Sign up failed'));
     } finally {
       setLoading(false);
     }

@@ -38,18 +38,6 @@ export default function AuthLayout() {
               Track credits, collections, and customers — the modern way to maintain your Roj Mel.
               Built for Indian shopkeepers.
             </p>
-            <div className="flex gap-8 mt-10">
-              {[
-                { value: '10K+', label: 'Shops' },
-                { value: '₹50Cr+', label: 'Tracked' },
-                { value: '99.9%', label: 'Uptime' },
-              ].map((s) => (
-                <div key={s.label}>
-                  <p className="text-2xl font-bold">{s.value}</p>
-                  <p className="text-xs text-white/50 mt-0.5">{s.label}</p>
-                </div>
-              ))}
-            </div>
           </div>
 
           <p className="text-xs text-white/40">© 2026 Daily Ledger Management System</p>

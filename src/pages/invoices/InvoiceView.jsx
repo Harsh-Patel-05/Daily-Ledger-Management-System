@@ -1,19 +1,57 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaPrint, FaDownload, FaTrash, FaExchangeAlt, FaCopy, FaRupeeSign, FaShareAlt } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
+import { useCompanies } from '../../context/CompaniesContext';
 import { useToast } from '../../context/ToastContext';
 import { useModal } from '../../context/ModalContext';
 import { downloadInvoicePdf, printInvoiceElement } from '../../utils/pdfExport';
 import InvoiceTemplate from '../../components/invoice/InvoiceTemplate';
 import RecordPaymentModal from '../../components/payments/RecordPaymentModal';
 import { Breadcrumbs, Button, ConfirmationDialog } from '../../components/ui';
+import { gstinStateCode, stateNameFromGstin, formatPartyAddress } from '../../utils/invoiceUtils';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 const DEFAULT_INVOICE_FORMAT = 'classic';
+
+function buildSellerProfile(profile, company) {
+  if (!company) {
+    return {
+      ...profile,
+      state: stateNameFromGstin(profile?.gst) || profile?.state || '',
+      stateCode: gstinStateCode(profile?.gst) || profile?.stateCode || '',
+    };
+  }
+  const gst = company.gstin || profile?.gst || '';
+  const stateFromGst = stateNameFromGstin(gst);
+  const state = stateFromGst || company.state || profile?.state || '';
+  const address = formatPartyAddress({
+    line1: company.addressLine1 || company.address_line1 || '',
+    line2: company.addressLine2 || company.address_line2 || '',
+    city: company.city || '',
+    state,
+    pincode: company.pincode || '',
+    fallback: profile?.address || '',
+  });
+  return {
+    ...profile,
+    shopName: company.name || company.legalName || profile?.shopName,
+    address,
+    gst,
+    mobile: company.mobile || company.phone || profile?.mobile,
+    phone: company.phone && company.phone !== company.mobile ? company.phone : (profile?.phone || ''),
+    email: company.email || profile?.email,
+    state,
+    stateCode: gstinStateCode(gst) || profile?.stateCode || '',
+    city: company.city || '',
+    tagline: company.alias ? String(company.alias) : profile?.tagline,
+  };
+}
 
 export default function InvoiceView() {
   const { id } = useParams();
   const { getInvoice, profile, deleteInvoice, addTransaction, duplicateInvoice, markInvoicePaid } = useApp();
+  const { activeCompany } = useCompanies();
   const toast = useToast();
   const navigate = useNavigate();
   const { openModal } = useModal();
@@ -24,6 +62,10 @@ export default function InvoiceView() {
   const [markingPaid, setMarkingPaid] = useState(false);
 
   const invoice = getInvoice(id);
+  const sellerProfile = useMemo(
+    () => buildSellerProfile(profile, activeCompany),
+    [profile, activeCompany]
+  );
 
   if (!invoice) {
     return (
@@ -46,6 +88,14 @@ export default function InvoiceView() {
     }
   };
 
+  const handlePrint = async () => {
+    try {
+      await printInvoiceElement(invoiceRef.current);
+    } catch {
+      toast.error('Failed to print invoice');
+    }
+  };
+
   const handleSyncLedger = async () => {
     try {
       for (const item of invoice.items || []) {
@@ -63,7 +113,7 @@ export default function InvoiceView() {
       }
       toast.success('Invoice items synced to ledger');
     } catch (err) {
-      toast.error(err.message || 'Sync failed');
+      toast.error(getApiErrorMessage(err, 'Sync failed'));
     }
   };
 
@@ -75,17 +125,17 @@ export default function InvoiceView() {
         navigate(`/invoices/${copy.id}`);
       }
     } catch (err) {
-      toast.error(err.message || 'Duplicate failed');
+      toast.error(getApiErrorMessage(err, 'Duplicate failed'));
     }
   };
 
   const handleMarkPaid = async () => {
     setMarkingPaid(true);
     try {
-      await markInvoicePaid(id, { method: 'Cash' });
-      toast.success('Invoice marked paid — ledger updated');
+      const __apiRes = await markInvoicePaid(id, { method: 'Cash' });
+      toast.success(getApiMessage(__apiRes, 'Invoice marked paid — ledger updated'));
     } catch (err) {
-      toast.error(err.message || 'Failed to mark paid');
+      toast.error(getApiErrorMessage(err, 'Failed to mark paid'));
     } finally {
       setMarkingPaid(false);
     }
@@ -123,7 +173,14 @@ export default function InvoiceView() {
                 </Button>
               </>
             )}
-            <Button variant="outline" size="sm" onClick={() => openModal('shareInvoice', { invoiceId: invoice.id })}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openModal('shareInvoice', {
+                invoiceId: invoice.id,
+                getInvoiceElement: () => invoiceRef.current,
+              })}
+            >
               <FaShareAlt size={12} /> Share
             </Button>
             <Button variant="outline" size="sm" onClick={handleDuplicate}>
@@ -132,7 +189,7 @@ export default function InvoiceView() {
             <Button variant="outline" size="sm" onClick={handleSyncLedger}>
               <FaExchangeAlt size={12} /> Sync Ledger
             </Button>
-            <Button variant="outline" size="sm" onClick={printInvoiceElement}>
+            <Button variant="outline" size="sm" onClick={handlePrint}>
               <FaPrint size={12} /> Print
             </Button>
             <Button size="sm" onClick={handleDownload} loading={downloading}>
@@ -145,13 +202,15 @@ export default function InvoiceView() {
         </div>
       </div>
 
-      <div className="bg-slate-100 dark:bg-slate-900/50 rounded-2xl p-4 sm:p-6 overflow-x-auto print:bg-white print:p-0">
-        <InvoiceTemplate
-          ref={invoiceRef}
-          invoice={{ ...invoice, format: DEFAULT_INVOICE_FORMAT }}
-          profile={profile}
-          format={DEFAULT_INVOICE_FORMAT}
-        />
+      <div className="bg-slate-100 dark:bg-slate-900/50 rounded-2xl p-3 sm:p-6 overflow-x-auto print:bg-white print:p-0 flex justify-center">
+        <div className="shadow-sm print:shadow-none bg-white">
+          <InvoiceTemplate
+            ref={invoiceRef}
+            invoice={{ ...invoice, format: DEFAULT_INVOICE_FORMAT }}
+            profile={sellerProfile}
+            format={DEFAULT_INVOICE_FORMAT}
+          />
+        </div>
       </div>
 
       <RecordPaymentModal
@@ -170,11 +229,11 @@ export default function InvoiceView() {
         onClose={() => setShowDelete(false)}
         onConfirm={async () => {
           try {
-            await deleteInvoice(id);
-            toast.success('Invoice deleted');
+            const __apiRes = await deleteInvoice(id);
+            toast.success(getApiMessage(__apiRes, 'Invoice deleted'));
             navigate('/invoices');
           } catch (err) {
-            toast.error(err.message || 'Delete failed');
+            toast.error(getApiErrorMessage(err, 'Delete failed'));
           }
         }}
         title="Delete Invoice"

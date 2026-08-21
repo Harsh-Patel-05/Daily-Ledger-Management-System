@@ -10,9 +10,10 @@ import { formatCurrency, formatPhone, formatDate } from '../../utils/formatters'
 import { filterBySearch, sortBy, getStatusColor } from '../../utils/helpers';
 import {
   Breadcrumbs, Card, SearchBox, Filter, Table, Pagination,
-  Button, Avatar, ConfirmationDialog, FloatingAddButton, EmptyState, ExportButton, ProgressBar,
+  Button, Avatar, ConfirmationDialog, EmptyState, ExportButton, ProgressBar,
 } from '../../components/ui';
 import { exportToCsv, customersToCsvRows } from '../../utils/exportCsv';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function CustomerList() {
   const { customers, deleteCustomer } = useApp();
@@ -43,7 +44,7 @@ export default function CustomerList() {
       setDeleteId(null);
       toast.success('Customer deleted successfully');
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
     }
   };
 
@@ -206,8 +207,6 @@ export default function CustomerList() {
           </>
         )}
       </Card>
-
-      <FloatingAddButton to="/customers/add" label="Add Customer" />
 
       <ConfirmationDialog
         open={!!deleteId}

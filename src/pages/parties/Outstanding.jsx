@@ -74,7 +74,7 @@ export default function Outstanding() {
       },
     ]
     : [
-      { key: 'name', label: 'Supplier' },
+      { key: 'name', label: 'Vendor' },
       {
         key: 'currentBalance',
         label: 'Payable',
@@ -95,19 +95,19 @@ export default function Outstanding() {
     <div className="space-y-4">
       <PageHeader
         title="Outstanding"
-        subtitle="Receivables from customers · Payables to suppliers"
-        breadcrumbs={[{ label: 'Parties', to: '/parties/customers' }, { label: 'Outstanding' }]}
+        subtitle="Receivables from customers · Payables to vendors"
+        breadcrumbs={[{ label: 'Party Master', to: '/parties/customers' }, { label: 'Outstanding' }]}
         actions={<Button variant="outline" onClick={() => openModal('dueCollections')}>Due Collections</Button>}
       />
       <div className="grid sm:grid-cols-2 gap-4">
         <StatCard title="Customer Due" value={formatCurrency(receivables.reduce((s, c) => s + (Number(c.currentBalance) || 0), 0))} color="amber" />
-        <StatCard title="Supplier Payable" value={formatCurrency(payables.reduce((s, c) => s + (Number(c.currentBalance) || 0), 0))} color="red" />
+        <StatCard title="Vendor Payable" value={formatCurrency(payables.reduce((s, c) => s + (Number(c.currentBalance) || 0), 0))} color="red" />
       </div>
 
       <div className="flex gap-2">
         {[
           { id: 'receivable', label: 'Receivable (Customers)' },
-          { id: 'payable', label: 'Payable (Suppliers)' },
+          { id: 'payable', label: 'Payable (Vendors)' },
         ].map((t) => (
           <button
             key={t.id}
@@ -125,7 +125,7 @@ export default function Outstanding() {
       <Card>
         <div className="mb-4"><SearchBox value={search} onChange={setSearch} placeholder="Search parties..." /></div>
         {list.length === 0 ? (
-          <EmptyState title="No outstanding" description={tab === 'receivable' ? 'All customers settled.' : 'No supplier dues from purchase bills.'} />
+          <EmptyState title="No outstanding" description={tab === 'receivable' ? 'All customers settled.' : 'No vendor dues from purchase bills.'} />
         ) : (
           <>
             <p className="text-sm text-muted mb-3">Total: <strong>{formatCurrency(totalDue)}</strong></p>

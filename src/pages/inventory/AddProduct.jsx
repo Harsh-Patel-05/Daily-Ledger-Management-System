@@ -1,19 +1,30 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { FaArrowLeft } from 'react-icons/fa';
 import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
 import { emptyProduct } from '../../data/inventoryDefaults';
+import { booksList } from '../../api/books';
 import { Breadcrumbs, Card } from '../../components/ui';
 import ProductForm from './ProductForm';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function AddProduct() {
   const { categories, brands, suppliers, addProduct } = useInventory();
   const [form, setForm] = useState({ ...emptyProduct });
+  const [units, setUnits] = useState([]);
+  const [godowns, setGodowns] = useState([]);
+  const [itemGroups, setItemGroups] = useState([]);
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const toast = useToast();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    booksList('units').then((d) => setUnits(Array.isArray(d) ? d : d?.results || [])).catch(() => setUnits([]));
+    booksList('godowns').then((d) => setGodowns(Array.isArray(d) ? d : d?.results || [])).catch(() => setGodowns([]));
+    booksList('item-groups').then((d) => setItemGroups(Array.isArray(d) ? d : d?.results || [])).catch(() => setItemGroups([]));
+  }, []);
 
   const validate = () => {
     const errs = {};
@@ -31,10 +42,10 @@ export default function AddProduct() {
     setLoading(true);
     try {
       const product = await addProduct(form);
-      toast.success('Product added');
+      toast.success(getApiMessage(product, 'Product added'));
       navigate(`/inventory/${product.id}`);
     } catch (err) {
-      toast.error(err.message || 'Failed to add product');
+      toast.error(getApiErrorMessage(err, 'Failed to add product'));
     } finally {
       setLoading(false);
     }
@@ -60,7 +71,10 @@ export default function AddProduct() {
           errors={errors}
           categories={categories}
           brands={brands}
+          itemGroups={itemGroups}
           suppliers={suppliers}
+          units={units}
+          godowns={godowns}
           loading={loading}
           submitLabel="Save Product"
           showOpeningStock

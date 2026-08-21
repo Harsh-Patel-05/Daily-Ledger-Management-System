@@ -30,7 +30,16 @@ class ActivityLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ActivityLog
         fields = ('id', 'type', 'message', 'created_at')
-        read_only_fields = fields
+        read_only_fields = ('id', 'created_at')
+
+    def validate_message(self, value):
+        value = (value or '').strip()
+        if not value:
+            raise serializers.ValidationError('message is required')
+        return value[:255]
+
+    def validate_type(self, value):
+        return ((value or 'info').strip() or 'info')[:50]
 
     def to_representation(self, instance):
         return {

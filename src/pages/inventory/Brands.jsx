@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { FaArrowLeft, FaPlus, FaEdit, FaTrash, FaIndustry } from 'react-icons/fa';
 import { useInventory } from '../../context/InventoryContext';
 import { useToast } from '../../context/ToastContext';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 import {
   Breadcrumbs, Card, Button, Input, Modal, ConfirmationDialog, EmptyState,
 } from '../../components/ui';
@@ -45,15 +46,15 @@ export default function Brands() {
     setLoading(true);
     try {
       if (editing) {
-        await updateBrand(editing.id, form);
-        toast.success('Brand updated');
+        const __apiRes = await updateBrand(editing.id, form);
+        toast.success(getApiMessage(__apiRes, 'Brand updated'));
       } else {
-        await addBrand(form);
-        toast.success('Brand added');
+        const __apiRes = await addBrand(form);
+        toast.success(getApiMessage(__apiRes, 'Brand added'));
       }
       setOpen(false);
     } catch (err) {
-      toast.error(err.message || 'Failed to save');
+      toast.error(getApiErrorMessage(err, 'Failed to save'));
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,7 @@ export default function Brands() {
       setDeleteId(null);
       toast.success('Brand deleted');
     } catch (err) {
-      toast.error(err.message || 'Delete failed');
+      toast.error(getApiErrorMessage(err, 'Delete failed'));
       setDeleteId(null);
     }
   };

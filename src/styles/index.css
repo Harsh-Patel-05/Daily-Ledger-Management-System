@@ -122,12 +122,21 @@
   }
 
   aside,
-  header {
+  header,
+  nav {
     display: none !important;
   }
 
   main {
     padding: 0 !important;
     max-width: none !important;
+  }
+
+  .invoice-tally {
+    width: 210mm !important;
+    max-width: 210mm !important;
+    margin: 0 auto !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }

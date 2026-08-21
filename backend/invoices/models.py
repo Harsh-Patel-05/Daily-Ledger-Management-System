@@ -34,6 +34,13 @@ class Invoice(models.Model):
         on_delete=models.CASCADE,
         related_name='invoices',
     )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='invoices',
+    )
     customer = models.ForeignKey(
         'customers.Customer',
         on_delete=models.PROTECT,
@@ -52,6 +59,11 @@ class Invoice(models.Model):
     discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=18)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    place_of_supply = models.CharField(max_length=80, blank=True)
+    is_interstate = models.BooleanField(default=False)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -65,6 +77,18 @@ class Invoice(models.Model):
     format = models.CharField(max_length=20, choices=Format.choices, default=Format.CLASSIC)
     notes = models.TextField(blank=True)
     terms = models.TextField(blank=True)
+    # Tally-style invoice header meta (all optional / dynamic from form)
+    delivery_note = models.CharField(max_length=100, blank=True, default='')
+    reference_no = models.CharField(max_length=100, blank=True, default='')
+    other_references = models.CharField(max_length=150, blank=True, default='')
+    buyer_order_no = models.CharField(max_length=100, blank=True, default='')
+    buyer_order_date = models.DateField(null=True, blank=True)
+    dispatch_doc_no = models.CharField(max_length=100, blank=True, default='')
+    delivery_note_date = models.DateField(null=True, blank=True)
+    dispatched_through = models.CharField(max_length=100, blank=True, default='')
+    destination = models.CharField(max_length=150, blank=True, default='')
+    terms_of_delivery = models.CharField(max_length=200, blank=True, default='')
+    payment_terms = models.CharField(max_length=100, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -80,17 +104,28 @@ class Invoice(models.Model):
         return self.invoice_number
 
     def recalculate_totals(self):
+        from decimal import Decimal
         items = self.items.all()
-        self.subtotal = sum((i.amount for i in items), start=0) or 0
-        after_discount = max(0, self.subtotal - (self.discount or 0))
+        self.subtotal = sum((i.amount for i in items), start=Decimal('0')) or Decimal('0')
+        after_discount = max(Decimal('0'), Decimal(self.subtotal) - Decimal(self.discount or 0))
         if self.gst_type == self.GstType.NON_GST:
             self.tax_rate = 0
-            self.tax_amount = 0
+            self.tax_amount = Decimal('0')
+            self.cgst_amount = self.sgst_amount = self.igst_amount = Decimal('0')
             self.total = after_discount
         else:
-            self.tax_amount = round(after_discount * (self.tax_rate or 0) / 100, 2)
-            self.total = after_discount + self.tax_amount
-        self.balance = max(0, self.total - (self.paid_amount or 0))
+            tax = (after_discount * Decimal(self.tax_rate or 0) / Decimal('100')).quantize(Decimal('0.01'))
+            self.tax_amount = tax
+            if self.is_interstate:
+                self.igst_amount = tax
+                self.cgst_amount = self.sgst_amount = Decimal('0')
+            else:
+                half = (tax / Decimal('2')).quantize(Decimal('0.01'))
+                self.cgst_amount = half
+                self.sgst_amount = tax - half
+                self.igst_amount = Decimal('0')
+            self.total = after_discount + tax
+        self.balance = max(Decimal('0'), Decimal(self.total) - Decimal(self.paid_amount or 0))
         if self.paid_amount >= self.total and self.total > 0:
             self.status = self.Status.PAID
         elif self.paid_amount > 0:
@@ -144,6 +179,13 @@ class SalesReturn(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        related_name='sales_returns',
+    )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='sales_returns',
     )
     customer = models.ForeignKey(

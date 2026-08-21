@@ -51,9 +51,10 @@ function useApiCollection({ listFn, createFn, updateFn, removeFn, afterMutate })
 
   const remove = useCallback(
     async (id) => {
-      await removeFn(id);
+      const row = await removeFn(id);
       await refresh();
       if (afterMutate) await afterMutate('remove', null, { id });
+      return row;
     },
     [removeFn, refresh, afterMutate]
   );
@@ -217,7 +218,11 @@ export function LocalModulesProvider({ children }) {
       if (isAuthenticated) refreshAll().catch(() => {});
     };
     window.addEventListener('dlms:refresh-modules', onRefresh);
-    return () => window.removeEventListener('dlms:refresh-modules', onRefresh);
+    window.addEventListener('dlms-company-changed', onRefresh);
+    return () => {
+      window.removeEventListener('dlms:refresh-modules', onRefresh);
+      window.removeEventListener('dlms-company-changed', onRefresh);
+    };
   }, [isAuthenticated, refreshAll]);
 
   const addPurchaseBill = useCallback(
@@ -246,7 +251,7 @@ export function LocalModulesProvider({ children }) {
     async (payload) => {
       const row = await expensesApi.createExpense({
         date: payload.date || new Date().toISOString().slice(0, 10),
-        categoryName: payload.categoryName || payload.category || 'Miscellaneous',
+        categoryName: payload.categoryName || payload.category || '',
         categoryId: payload.categoryId || null,
         amount: Number(payload.amount) || 0,
         paymentMode: payload.paymentMode || payload.paymentMethod || 'Cash',
@@ -262,7 +267,7 @@ export function LocalModulesProvider({ children }) {
   const supplierPayables = useMemo(() => {
     const map = {};
     purchaseBills.items.forEach((b) => {
-      const name = b.supplierName || 'Supplier';
+      const name = b.supplierName || 'Vendor';
       if (!map[name]) map[name] = { id: name, name, currentBalance: 0, type: 'supplier' };
       map[name].currentBalance += Number(b.balance) || 0;
     });

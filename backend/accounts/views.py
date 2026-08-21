@@ -37,7 +37,15 @@ class RegisterView(APIView):
         ser = RegisterSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         user = ser.save()
-        return Response(tokens_for_user(user), status=status.HTTP_201_CREATED)
+        payload = tokens_for_user(user)
+        return Response(
+            {
+                'success': True,
+                'message': 'Account created successfully',
+                'data': payload,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class LoginView(APIView):
@@ -52,10 +60,30 @@ class LoginView(APIView):
             password=ser.validated_data['password'],
         )
         if not user:
-            return Response({'detail': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response(
+                {
+                    'success': False,
+                    'message': 'Invalid email or password',
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         if getattr(user, 'business_owner_id', None) and not getattr(user, 'is_active_staff', True):
-            return Response({'detail': 'Staff account is deactivated'}, status=status.HTTP_403_FORBIDDEN)
-        return Response(tokens_for_user(user))
+            return Response(
+                {
+                    'success': False,
+                    'message': 'Staff account is deactivated',
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        payload = tokens_for_user(user)
+        return Response(
+            {
+                'success': True,
+                'message': 'Login successful',
+                'data': payload,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class MeView(APIView):
@@ -125,7 +153,13 @@ class ResetPasswordView(APIView):
         user.save()
         record.is_used = True
         record.save(update_fields=['is_used'])
-        return Response({'detail': 'Password reset successfully'})
+        return Response(
+            {
+                'success': True,
+                'message': 'Password reset successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ChangePasswordView(APIView):
@@ -133,10 +167,22 @@ class ChangePasswordView(APIView):
         ser = ChangePasswordSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         if not request.user.check_password(ser.validated_data['current_password']):
-            return Response({'detail': 'Current password is incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    'success': False,
+                    'message': 'Current password is incorrect',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         request.user.set_password(ser.validated_data['new_password'])
         request.user.save()
-        return Response({'detail': 'Password changed successfully'})
+        return Response(
+            {
+                'success': True,
+                'message': 'Password changed successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ProfileView(APIView):
@@ -188,7 +234,15 @@ class ProfileView(APIView):
             dirty = True
         if dirty:
             settings_obj.save()
-        return Response(ser.data)
+        data = ser.data
+        return Response(
+            {
+                'success': True,
+                'message': 'Profile updated successfully',
+                'data': data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class SettingsView(APIView):
@@ -235,7 +289,15 @@ class SettingsView(APIView):
         if settings_obj.gst_number:
             profile.gst = settings_obj.gst_number
         profile.save()
-        return Response(BusinessSettingsSerializer(settings_obj).data)
+        data = BusinessSettingsSerializer(settings_obj).data
+        return Response(
+            {
+                'success': True,
+                'message': 'Settings updated successfully',
+                'data': data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class StaffUserViewSet(viewsets.ModelViewSet):
@@ -261,6 +323,49 @@ class StaffUserViewSet(viewsets.ModelViewSet):
             raise PermissionDenied('Not your staff member')
         instance.delete()
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'User created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'User updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'User deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class ShopRoleViewSet(viewsets.ModelViewSet):
     serializer_class = ShopRoleSerializer
@@ -273,6 +378,49 @@ class ShopRoleViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=data_owner(self.request.user))
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Role created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Role updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Role deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class ShopPermissionViewSet(viewsets.ModelViewSet):
     serializer_class = ShopPermissionSerializer
@@ -284,3 +432,46 @@ class ShopPermissionViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(owner=data_owner(self.request.user))
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Permission created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Permission updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Permission deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )

@@ -36,9 +36,14 @@ export function toSupplierPayload(data) {
 export function toProductPayload(data, { includeStock = false } = {}) {
   const payload = {
     name: data.name,
+    sku: data.sku || '',
+    barcode: data.barcode || '',
     brandId: data.brandId ? stripId(data.brandId) : null,
     categoryId: data.categoryId ? stripId(data.categoryId) : null,
+    itemGroupId: data.itemGroupId ? stripId(data.itemGroupId) : null,
     supplierId: data.supplierId ? stripId(data.supplierId) : null,
+    unitId: data.unitId ? stripId(data.unitId) : null,
+    godownId: data.godownId ? stripId(data.godownId) : null,
     description: data.description || '',
     purchaseDate: data.purchaseDate || null,
     purchasePrice: Number(data.purchasePrice) || 0,
@@ -47,7 +52,15 @@ export function toProductPayload(data, { includeStock = false } = {}) {
     sellingPriceWithGst: Number(data.sellingPriceWithGst) || 0,
     taxRate: Number(data.taxRate) || 0,
     purchasedQuantity: Number(data.purchasedQuantity) || 0,
+    reorderLevel: Number(data.reorderLevel) || 0,
     status: data.status || 'active',
+    alternateUnits: (data.alternateUnits || [])
+      .filter((u) => u.unitId)
+      .map((u) => ({
+        unitId: stripId(u.unitId),
+        conversionFactor: Number(u.conversionFactor) || 1,
+        barcode: u.barcode || '',
+      })),
   };
   if (includeStock) payload.stockQty = Number(data.stockQty) || 0;
   return payload;
@@ -128,6 +141,7 @@ export function listMovements(params = '') {
 export function createMovement(data) {
   return api.post('/inventory/movements/', {
     productId: stripId(data.productId),
+    godownId: data.godownId ? stripId(data.godownId) : undefined,
     type: data.type,
     quantity: data.quantity,
     newQty: data.newQty,
@@ -139,6 +153,15 @@ export function createMovement(data) {
 
 export function getInventoryStats() {
   return api.get('/inventory/stats/');
+}
+
+export function lookupBarcode(code) {
+  return api.get(`/inventory/barcode/?code=${encodeURIComponent(code)}`);
+}
+
+export function listGodownStock(params = {}) {
+  const q = new URLSearchParams(params).toString();
+  return api.get(`/inventory/godown-stock/${q ? `?${q}` : ''}`);
 }
 
 /** Bulk import products from CSV or Excel (.xlsx). */

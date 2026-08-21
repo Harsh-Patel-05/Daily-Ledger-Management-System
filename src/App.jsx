@@ -5,6 +5,8 @@ import { ToastProvider } from './context/ToastContext';
 import { AppProvider } from './context/AppContext';
 import { InventoryProvider } from './context/InventoryContext';
 import { LocalModulesProvider } from './context/LocalModulesContext';
+import { CompaniesProvider } from './context/CompaniesContext';
+import { ChartOfAccountsProvider } from './context/ChartOfAccountsContext';
 import { ModalProvider } from './context/ModalContext';
 import { TourProvider } from './context/TourContext';
 import AppRoutes from './routes/AppRoutes';
@@ -25,15 +27,19 @@ export default function App() {
             <AppProvider>
               <InventoryProvider>
                 <LocalModulesProvider>
-                  <ModalProvider>
-                    <TourProvider>
-                      <AppRoutes />
-                      <GlobalModals />
-                      <NotificationWatcher />
-                      <InventoryAlertWatcher />
-                      <ProductTour />
-                    </TourProvider>
-                  </ModalProvider>
+                  <CompaniesProvider>
+                    <ChartOfAccountsProvider>
+                      <ModalProvider>
+                        <TourProvider>
+                          <AppRoutes />
+                          <GlobalModals />
+                          <NotificationWatcher />
+                          <InventoryAlertWatcher />
+                          <ProductTour />
+                        </TourProvider>
+                      </ModalProvider>
+                    </ChartOfAccountsProvider>
+                  </CompaniesProvider>
                 </LocalModulesProvider>
               </InventoryProvider>
             </AppProvider>

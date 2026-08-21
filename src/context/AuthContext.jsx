@@ -39,15 +39,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const authUser = await authApi.login(email, password);
-    setUser(authUser);
-    return authUser;
+    const result = await authApi.login(email, password);
+    const { detail, message, apiMessage, success, ...user } = result || {};
+    setUser(user);
+    return result;
   }, []);
 
   const register = useCallback(async (payload) => {
-    const authUser = await authApi.register(payload);
-    setUser(authUser);
-    return authUser;
+    const result = await authApi.register(payload);
+    const { detail, message, apiMessage, success, ...user } = result || {};
+    setUser(user);
+    return result;
   }, []);
 
   const logout = useCallback(() => {

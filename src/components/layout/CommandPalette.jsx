@@ -5,19 +5,23 @@ import {
   FaSearch, FaTachometerAlt, FaUsers, FaExchangeAlt, FaFileInvoiceDollar,
   FaBook, FaChartBar, FaChartPie, FaBell, FaCog, FaUser, FaPlus, FaUpload,
   FaMoon, FaSun, FaKeyboard, FaHandHoldingUsd, FaClock, FaCalendarCheck, FaReceipt, FaRocket,
-  FaBoxes, FaTags, FaTruck,
+  FaBoxes, FaTags, FaTruck, FaBuilding,
 } from 'react-icons/fa';
 import { useApp } from '../../context/AppContext';
 import { useInventory } from '../../context/InventoryContext';
 import { useTheme } from '../../context/ThemeContext';
 import { useModal } from '../../context/ModalContext';
 import { useTour } from '../../context/TourContext';
+import { useCompanies } from '../../context/CompaniesContext';
+import { isGstOnlyPath } from '../../utils/companyGst';
 import { cn } from '../../utils/formatters';
 
 const navCommands = [
   { id: 'dash', label: 'Go to Dashboard', icon: FaTachometerAlt, to: '/dashboard', group: 'Navigate' },
+  { id: 'cmp', label: 'Companies', icon: FaBuilding, to: '/companies', group: 'Navigate' },
+  { id: 'cmp-new', label: 'Create Company', icon: FaPlus, to: '/companies/create', group: 'Navigate' },
   { id: 'cust', label: 'Customers', icon: FaUsers, to: '/parties/customers', group: 'Navigate' },
-  { id: 'sup', label: 'Suppliers', icon: FaTruck, to: '/parties/suppliers', group: 'Navigate' },
+  { id: 'sup', label: 'Vendors', icon: FaTruck, to: '/parties/vendors', group: 'Navigate' },
   { id: 'out', label: 'Outstanding', icon: FaClock, to: '/parties/outstanding', group: 'Navigate' },
   { id: 'invt', label: 'Products', icon: FaBoxes, to: '/inventory/products', group: 'Navigate' },
   { id: 'invt-cat', label: 'Categories', icon: FaTags, to: '/inventory/categories', group: 'Navigate' },
@@ -26,7 +30,7 @@ const navCommands = [
   { id: 'inv', label: 'Sales Invoices', icon: FaFileInvoiceDollar, to: '/sales/invoices', group: 'Navigate' },
   { id: 'pur', label: 'Purchase Bills', icon: FaFileInvoiceDollar, to: '/purchase/bills', group: 'Navigate' },
   { id: 'payin', label: 'Payment In', icon: FaHandHoldingUsd, to: '/payments/in', group: 'Navigate' },
-  { id: 'led', label: 'Party Ledger', icon: FaBook, to: '/ledger/party', group: 'Navigate' },
+  { id: 'coa', label: 'Charts of Account', icon: FaBook, to: '/accounts/charts', group: 'Navigate' },
   { id: 'exp', label: 'Expenses', icon: FaReceipt, to: '/expenses', group: 'Navigate' },
   { id: 'gst', label: 'GST Dashboard', icon: FaChartBar, to: '/gst', group: 'Navigate' },
   { id: 'rep', label: 'Reports', icon: FaChartBar, to: '/reports', group: 'Navigate' },
@@ -44,6 +48,7 @@ export default function CommandPalette() {
   const { darkMode, toggleDarkMode } = useTheme();
   const { openModal } = useModal();
   const { startTour } = useTour();
+  const { isGstEnabled } = useCompanies();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
@@ -78,8 +83,11 @@ export default function CommandPalette() {
   }, [commandOpen]);
 
   const commands = useMemo(() => {
+    const nav = isGstEnabled
+      ? navCommands
+      : navCommands.filter((c) => !c.to || !isGstOnlyPath(c.to));
     const dynamic = [
-      ...navCommands,
+      ...nav,
       {
         id: 'q-pay',
         label: 'Record Payment',
@@ -198,7 +206,7 @@ export default function CommandPalette() {
         c.sub?.toLowerCase().includes(q) ||
         c.group?.toLowerCase().includes(q)
     );
-  }, [query, customers, invoices, products, darkMode, handleThemeToggle, openModal, startTour]);
+  }, [query, customers, invoices, products, darkMode, handleThemeToggle, openModal, startTour, isGstEnabled]);
 
   useEffect(() => setIndex(0), [query]);
 

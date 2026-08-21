@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
+import { getApiMessage, getApiErrorMessage } from '../../utils/apiMessage';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -23,12 +24,12 @@ export default function ForgotPassword() {
     setLoading(true);
     try {
       const res = await forgotPassword(email);
-      toast.success('OTP sent to your email');
+      toast.success(getApiMessage(res, 'OTP sent to your email'));
       navigate('/otp-verification', {
-        state: { email, demoOtp: res.otp_demo || null },
+        state: { email },
       });
     } catch (err) {
-      toast.error(err.message || 'Failed to send OTP');
+      toast.error(getApiErrorMessage(err, 'Failed to send OTP'));
     } finally {
       setLoading(false);
     }

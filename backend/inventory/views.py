@@ -6,14 +6,16 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters import rest_framework as filters
 from accounts.ownership import data_owner
+from companies.company_scope import scope_queryset, assign_owner_company
 from notifications.models import ActivityLog
-from .models import Category, Brand, Supplier, Product, StockMovement
+from .models import Category, Brand, Supplier, Product, StockMovement, GodownStock
 from .serializers import (
     CategorySerializer,
     BrandSerializer,
     SupplierSerializer,
     ProductSerializer,
     StockMovementSerializer,
+    GodownStockSerializer,
 )
 from .bulk_import import parse_upload, import_product_rows
 
@@ -25,13 +27,13 @@ class CategoryViewSet(viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        return Category.objects.filter(owner=data_owner(self.request.user))
+        return scope_queryset(Category.objects.all(), self.request)
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        cat = serializer.save(owner=owner)
+        kwargs = assign_owner_company(self.request)
+        cat = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='inventory',
             message=f'Category added: {cat.name}',
         )
@@ -49,6 +51,49 @@ class CategoryViewSet(viewsets.ModelViewSet):
             message=f'Category deleted: {name}',
         )
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Category created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Category updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Category deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class BrandViewSet(viewsets.ModelViewSet):
     serializer_class = BrandSerializer
@@ -57,13 +102,13 @@ class BrandViewSet(viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        return Brand.objects.filter(owner=data_owner(self.request.user))
+        return scope_queryset(Brand.objects.all(), self.request)
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        brand = serializer.save(owner=owner)
+        kwargs = assign_owner_company(self.request)
+        brand = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='inventory',
             message=f'Brand added: {brand.name}',
         )
@@ -81,6 +126,49 @@ class BrandViewSet(viewsets.ModelViewSet):
             message=f'Brand deleted: {name}',
         )
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Brand created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Brand updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Brand deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class SupplierViewSet(viewsets.ModelViewSet):
     serializer_class = SupplierSerializer
@@ -89,15 +177,15 @@ class SupplierViewSet(viewsets.ModelViewSet):
     ordering = ['name']
 
     def get_queryset(self):
-        return Supplier.objects.filter(owner=data_owner(self.request.user))
+        return scope_queryset(Supplier.objects.all(), self.request)
 
     def perform_create(self, serializer):
-        owner = data_owner(self.request.user)
-        sup = serializer.save(owner=owner)
+        kwargs = assign_owner_company(self.request)
+        sup = serializer.save(**kwargs)
         ActivityLog.objects.create(
-            owner=owner,
+            owner=kwargs['owner'],
             type='inventory',
-            message=f'Supplier added: {sup.name}',
+            message=f'Vendor added: {sup.name}',
         )
 
     def perform_destroy(self, instance):
@@ -108,7 +196,50 @@ class SupplierViewSet(viewsets.ModelViewSet):
         ActivityLog.objects.create(
             owner=owner,
             type='inventory',
-            message=f'Supplier deleted: {name}',
+            message=f'Vendor deleted: {name}',
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Vendor created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Vendor updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Vendor deleted successfully',
+            },
+            status=status.HTTP_200_OK,
         )
 
 
@@ -141,14 +272,24 @@ class ProductFilter(filters.FilterSet):
 class ProductViewSet(viewsets.ModelViewSet):
     serializer_class = ProductSerializer
     filterset_class = ProductFilter
-    search_fields = ['name', 'brand__name', 'description']
+    search_fields = ['name', 'brand__name', 'description', 'sku', 'barcode']
     ordering_fields = ['name', 'stock_qty', 'selling_price', 'purchase_price', 'created_at', 'updated_at']
     ordering = ['name']
 
     def get_queryset(self):
-        return Product.objects.filter(owner=data_owner(self.request.user)).select_related(
-            'category', 'brand', 'supplier'
+        qs = scope_queryset(
+            Product.objects.select_related('category', 'brand', 'supplier', 'unit').prefetch_related(
+                'alternate_units__unit', 'godown_stocks__godown'
+            ).all(),
+            self.request,
         )
+        barcode = self.request.query_params.get('barcode')
+        if barcode:
+            qs = qs.filter(barcode__iexact=barcode.strip())
+        sku = self.request.query_params.get('sku')
+        if sku:
+            qs = qs.filter(sku__iexact=sku.strip())
+        return qs
 
     def get_object(self):
         lookup = self.kwargs.get(self.lookup_field)
@@ -160,7 +301,7 @@ class ProductViewSet(viewsets.ModelViewSet):
         return super().get_object()
 
     def perform_create(self, serializer):
-        product = serializer.save()
+        product = serializer.save(**assign_owner_company(self.request))
         ActivityLog.objects.create(
             owner=data_owner(self.request.user),
             type='inventory',
@@ -185,6 +326,49 @@ class ProductViewSet(viewsets.ModelViewSet):
             message=f'Product deleted: {name}',
         )
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Product created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Product updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Product deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 class StockMovementFilter(filters.FilterSet):
     type = filters.CharFilter(field_name='type')
@@ -206,24 +390,67 @@ class StockMovementViewSet(viewsets.ModelViewSet):
     ordering = ['-date', '-created_at']
 
     def get_queryset(self):
-        return StockMovement.objects.filter(owner=data_owner(self.request.user)).select_related(
-            'product'
+        return scope_queryset(
+            StockMovement.objects.select_related('product').all(),
+            self.request,
         )
 
     def perform_create(self, serializer):
-        movement = serializer.save()
+        movement = serializer.save(**assign_owner_company(self.request))
         ActivityLog.objects.create(
             owner=data_owner(self.request.user),
             type='inventory',
             message=f'Stock {movement.type}: {movement.product.name} ({movement.quantity})',
         )
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Stock movement created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Stock movement updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Stock movement deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def inventory_stats(request):
-    owner = data_owner(request.user)
-    products = Product.objects.filter(owner=owner)
+    products = scope_queryset(Product.objects.all(), request)
     active = products.filter(status=Product.Status.ACTIVE)
     low = products.filter(stock_qty__gt=0, stock_qty__lte=10).exclude(
         status=Product.Status.DISCONTINUED
@@ -250,7 +477,7 @@ def inventory_stats(request):
     low_items = ProductSerializer(low[:20], many=True, context={'request': request}).data
     out_items = ProductSerializer(out[:20], many=True, context={'request': request}).data
     recent = StockMovementSerializer(
-        StockMovement.objects.filter(owner=owner).select_related('product')[:8],
+        scope_queryset(StockMovement.objects.select_related('product').all(), request)[:8],
         many=True,
         context={'request': request},
     ).data
@@ -258,9 +485,9 @@ def inventory_stats(request):
     return Response({
         'totalProducts': products.count(),
         'activeProducts': active.count(),
-        'categories': Category.objects.filter(owner=owner).count(),
-        'brands': Brand.objects.filter(owner=owner).count(),
-        'suppliers': Supplier.objects.filter(owner=owner).count(),
+        'categories': scope_queryset(Category.objects.all(), request).count(),
+        'brands': scope_queryset(Brand.objects.all(), request).count(),
+        'suppliers': scope_queryset(Supplier.objects.all(), request).count(),
         'lowStock': low.count(),
         'outOfStock': out.count(),
         'stockValueWithoutGst': float(stock_value_without_gst),
@@ -283,27 +510,54 @@ def products_bulk_import(request):
     """Upload CSV or Excel (.xlsx) to create/update products."""
     upload = request.FILES.get('file')
     if not upload:
-        return Response({'detail': 'file is required'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                'success': False,
+                'message': 'file is required',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     update_raw = str(request.data.get('updateExisting', 'true')).strip().lower()
     update_existing = update_raw not in ('0', 'false', 'no', 'skip')
 
     data = upload.read()
     if not data:
-        return Response({'detail': 'Empty file'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                'success': False,
+                'message': 'Empty file',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         rows, parse_meta = parse_upload(upload.name, data)
     except ValueError as exc:
-        return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                'success': False,
+                'message': str(exc),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     except Exception as exc:  # noqa: BLE001
         return Response(
-            {'detail': f'Could not read file: {exc}'},
+            {
+                'success': False,
+                'message': f'Could not read file: {exc}',
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     if not rows:
-        return Response({'detail': 'No product rows found'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(
+            {
+                'success': False,
+                'message': 'No product rows found',
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     owner = data_owner(request.user)
     result = import_product_rows(owner, rows, update_existing=update_existing)
@@ -317,4 +571,55 @@ def products_bulk_import(request):
             f'({parse_meta.get("duplicatesCollapsed", 0)} duplicate names merged)'
         ),
     )
-    return Response(result)
+    return Response(
+        {
+            'success': True,
+            'message': 'Products imported successfully',
+            'data': result,
+        },
+        status=status.HTTP_200_OK,
+    )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def barcode_lookup(request):
+    """Find product by barcode or SKU (exact, company-scoped)."""
+    code = (request.query_params.get('code') or request.query_params.get('barcode') or '').strip()
+    if not code:
+        return Response({'detail': 'code is required'}, status=status.HTTP_400_BAD_REQUEST)
+    qs = scope_queryset(Product.objects.select_related('unit', 'brand', 'category'), request)
+    product = qs.filter(barcode__iexact=code).first()
+    if not product:
+        product = qs.filter(sku__iexact=code).first()
+    if not product:
+        from .models import ProductAlternateUnit
+        alt = (
+            ProductAlternateUnit.objects.filter(barcode__iexact=code, product__in=qs)
+            .select_related('product', 'product__unit')
+            .first()
+        )
+        if alt:
+            product = alt.product
+            data = ProductSerializer(product, context={'request': request}).data
+            data['matchedUnitId'] = alt.unit_id
+            data['matchedConversionFactor'] = float(alt.conversion_factor or 1)
+            return Response(data)
+        return Response({'detail': 'Not found'}, status=status.HTTP_404_NOT_FOUND)
+    return Response(ProductSerializer(product, context={'request': request}).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def godown_stock_list(request):
+    """Per-godown stock balances for active company."""
+    from companies.company_scope import get_active_company
+    company = get_active_company(request, required=True)
+    qs = GodownStock.objects.filter(company=company).select_related('product', 'godown')
+    product_id = request.query_params.get('product') or request.query_params.get('productId')
+    godown_id = request.query_params.get('godown') or request.query_params.get('godownId')
+    if product_id:
+        qs = qs.filter(product_id=product_id)
+    if godown_id:
+        qs = qs.filter(godown_id=godown_id)
+    return Response(GodownStockSerializer(qs[:500], many=True).data)

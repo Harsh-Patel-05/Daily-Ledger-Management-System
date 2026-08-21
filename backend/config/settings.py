@@ -39,6 +39,9 @@ INSTALLED_APPS = [
     'core',
     'purchase',
     'expenses',
+    'companies.apps.CompaniesConfig',
+    'books.apps.BooksConfig',
+    'gst.apps.GstConfig',
 ]
 
 MIDDLEWARE = [
@@ -133,6 +136,18 @@ CORS_ALLOWED_ORIGINS = config(
     cast=Csv(),
 )
 CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-company-id',
+]
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r'^https://.*\.netlify\.app$',
 ]

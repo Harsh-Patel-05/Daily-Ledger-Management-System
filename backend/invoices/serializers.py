@@ -28,6 +28,30 @@ class InvoiceSerializer(serializers.ModelSerializer):
     )
     paymentMethod = serializers.CharField(source='payment_method', required=False)
     gstType = serializers.CharField(source='gst_type', required=False)
+    cgstAmount = serializers.DecimalField(
+        source='cgst_amount', max_digits=12, decimal_places=2, required=False, read_only=True
+    )
+    sgstAmount = serializers.DecimalField(
+        source='sgst_amount', max_digits=12, decimal_places=2, required=False, read_only=True
+    )
+    igstAmount = serializers.DecimalField(
+        source='igst_amount', max_digits=12, decimal_places=2, required=False, read_only=True
+    )
+    placeOfSupply = serializers.CharField(
+        source='place_of_supply', required=False, allow_blank=True
+    )
+    isInterstate = serializers.BooleanField(source='is_interstate', required=False)
+    deliveryNote = serializers.CharField(source='delivery_note', required=False, allow_blank=True)
+    referenceNo = serializers.CharField(source='reference_no', required=False, allow_blank=True)
+    otherReferences = serializers.CharField(source='other_references', required=False, allow_blank=True)
+    buyerOrderNo = serializers.CharField(source='buyer_order_no', required=False, allow_blank=True)
+    buyerOrderDate = serializers.DateField(source='buyer_order_date', required=False, allow_null=True)
+    dispatchDocNo = serializers.CharField(source='dispatch_doc_no', required=False, allow_blank=True)
+    deliveryNoteDate = serializers.DateField(source='delivery_note_date', required=False, allow_null=True)
+    dispatchedThrough = serializers.CharField(source='dispatched_through', required=False, allow_blank=True)
+    destination = serializers.CharField(required=False, allow_blank=True)
+    termsOfDelivery = serializers.CharField(source='terms_of_delivery', required=False, allow_blank=True)
+    paymentTerms = serializers.CharField(source='payment_terms', required=False, allow_blank=True)
 
     class Meta:
         model = Invoice
@@ -37,13 +61,26 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'customer_name', 'customer_business', 'customer_address',
             'customer_gst', 'customer_mobile',
             'subtotal', 'discount', 'tax_rate', 'taxRate', 'tax_amount',
+            'cgst_amount', 'cgstAmount', 'sgst_amount', 'sgstAmount',
+            'igst_amount', 'igstAmount',
+            'place_of_supply', 'placeOfSupply', 'is_interstate', 'isInterstate',
             'total', 'paid_amount', 'paidAmount', 'balance',
             'payment_method', 'paymentMethod', 'gst_type', 'gstType', 'status', 'format',
-            'notes', 'terms', 'items', 'created_at', 'updated_at',
+            'notes', 'terms',
+            'delivery_note', 'deliveryNote', 'reference_no', 'referenceNo',
+            'other_references', 'otherReferences',
+            'buyer_order_no', 'buyerOrderNo', 'buyer_order_date', 'buyerOrderDate',
+            'dispatch_doc_no', 'dispatchDocNo',
+            'delivery_note_date', 'deliveryNoteDate',
+            'dispatched_through', 'dispatchedThrough',
+            'destination', 'terms_of_delivery', 'termsOfDelivery',
+            'payment_terms', 'paymentTerms',
+            'items', 'created_at', 'updated_at',
         )
         read_only_fields = (
             'id', 'customer_name', 'customer_business', 'customer_address',
             'customer_gst', 'customer_mobile', 'subtotal', 'tax_amount',
+            'cgst_amount', 'sgst_amount', 'igst_amount',
             'total', 'balance', 'status', 'created_at', 'updated_at',
         )
         extra_kwargs = {
@@ -117,25 +154,101 @@ class InvoiceSerializer(serializers.ModelSerializer):
             elif tax_rate is None:
                 tax_rate = 18
 
+            from companies.company_scope import get_active_company
+            company = get_active_company(request)
+
+            def _gst_code(gstin='', state_code=''):
+                g = (gstin or '').strip().upper()
+                if len(g) >= 2 and g[:2].isdigit():
+                    return g[:2]
+                sc = (state_code or '').strip()
+                if sc.isdigit():
+                    return sc.zfill(2)[:2]
+                return ''
+
+            def _norm_state(name=''):
+                s = (name or '').strip().upper().replace('  ', ' ')
+                if not s:
+                    return ''
+                if s in ('MP',) or 'MADHYA' in s:
+                    return 'MADHYA PRADESH'
+                if s in ('GJ',) or 'GUJARAT' in s:
+                    return 'GUJARAT'
+                return s
+
+            company_gstin = (company.gstin if company else '') or ''
+            company_code = _gst_code(company_gstin, '')
+            party_code = _gst_code(
+                customer.gst or '',
+                getattr(customer, 'state_code', '') or '',
+            )
+            if company_code and party_code:
+                interstate = company_code != party_code
+            else:
+                company_state = _norm_state(company.state if company else '')
+                party_state = _norm_state(customer.state or '')
+                interstate = bool(
+                    company_state and party_state and company_state != party_state
+                )
+            if 'is_interstate' in validated:
+                interstate = bool(validated.get('is_interstate'))
+            place = (
+                validated.get('place_of_supply')
+                or (customer.state or '')
+                or (company.state if company else '')
+                or ''
+            )
+
+            dest = (
+                validated.get('destination')
+                or ''
+            )
+            if not dest:
+                # derive from shipping / address city fragment
+                ship = (getattr(customer, 'shipping_address', '') or '').strip()
+                addr = (customer.address or '').strip()
+                for raw in (ship, addr):
+                    bits = [b.strip() for b in raw.split(',') if b.strip()]
+                    for bit in reversed(bits):
+                        if bit.upper() not in ('MP', 'GJ', 'MH', 'DL', 'INDIA') and not bit.isdigit() and len(bit) > 2:
+                            dest = bit
+                            break
+                    if dest:
+                        break
+
             invoice = Invoice.objects.create(
                 owner=owner,
+                company=company,
                 customer=customer,
                 invoice_number=invoice_number,
                 date=validated['date'],
                 due_date=validated.get('due_date'),
                 customer_name=customer.name,
                 customer_business=customer.business_name,
-                customer_address=customer.address,
+                customer_address=customer.address or customer.billing_address or '',
                 customer_gst=customer.gst if gst_type == Invoice.GstType.GST else '',
                 customer_mobile=customer.mobile,
                 discount=validated.get('discount') or 0,
                 tax_rate=tax_rate,
                 gst_type=gst_type,
+                place_of_supply=place,
+                is_interstate=interstate,
                 paid_amount=validated.get('paid_amount') or 0,
                 payment_method=validated.get('payment_method') or Invoice.PaymentMethod.CREDIT,
                 format=validated.get('format') or Invoice.Format.CLASSIC,
                 notes=validated.get('notes', ''),
                 terms=validated.get('terms', ''),
+                delivery_note=validated.get('delivery_note') or '',
+                reference_no=validated.get('reference_no') or '',
+                other_references=validated.get('other_references') or '',
+                buyer_order_no=validated.get('buyer_order_no') or '',
+                buyer_order_date=validated.get('buyer_order_date'),
+                dispatch_doc_no=validated.get('dispatch_doc_no') or '',
+                delivery_note_date=validated.get('delivery_note_date'),
+                dispatched_through=validated.get('dispatched_through') or '',
+                destination=dest,
+                terms_of_delivery=validated.get('terms_of_delivery') or '',
+                payment_terms=validated.get('payment_terms') or '',
             )
 
             for idx, item in enumerate(items_data):
@@ -199,8 +312,15 @@ class InvoiceSerializer(serializers.ModelSerializer):
         if items_data is None and 'items' in self.initial_data:
             items_data = self.initial_data.get('items')
 
-        for attr in ('date', 'due_date', 'discount', 'tax_rate', 'paid_amount',
-                     'payment_method', 'gst_type', 'format', 'notes', 'terms'):
+        for attr in (
+            'date', 'due_date', 'discount', 'tax_rate', 'paid_amount',
+            'payment_method', 'gst_type', 'format', 'notes', 'terms',
+            'place_of_supply', 'is_interstate',
+            'delivery_note', 'reference_no', 'other_references',
+            'buyer_order_no', 'buyer_order_date', 'dispatch_doc_no',
+            'delivery_note_date', 'dispatched_through', 'destination',
+            'terms_of_delivery', 'payment_terms',
+        ):
             if attr in validated:
                 setattr(instance, attr, validated[attr])
         if instance.gst_type == Invoice.GstType.NON_GST:
@@ -247,21 +367,42 @@ class InvoiceSerializer(serializers.ModelSerializer):
             'customerAddress': instance.customer_address,
             'customerGst': instance.customer_gst,
             'customerMobile': instance.customer_mobile,
+            'customerState': getattr(instance.customer, 'state', '') or instance.place_of_supply or '',
+            'customerStateCode': getattr(instance.customer, 'state_code', '') or '',
+            'customerPincode': getattr(instance.customer, 'pincode', '') or '',
+            'customerShippingAddress': getattr(instance.customer, 'shipping_address', '') or '',
             'items': items,
             'subtotal': float(instance.subtotal),
             'discount': float(instance.discount),
             'taxRate': float(instance.tax_rate),
             'taxAmount': float(instance.tax_amount),
+            'cgstAmount': float(instance.cgst_amount or 0),
+            'sgstAmount': float(instance.sgst_amount or 0),
+            'igstAmount': float(instance.igst_amount or 0),
+            'placeOfSupply': instance.place_of_supply or '',
+            'isInterstate': bool(instance.is_interstate),
             'total': float(instance.total),
             'paidAmount': float(instance.paid_amount),
             'balance': float(instance.balance),
             'paymentMethod': instance.payment_method,
+            'paymentTerms': instance.payment_terms or '',
             'gstType': instance.gst_type,
             'status': instance.status,
             'format': instance.format,
-            'notes': instance.notes,
-            'terms': instance.terms,
+            'notes': instance.notes or '',
+            'terms': instance.terms or '',
+            'deliveryNote': instance.delivery_note or '',
+            'referenceNo': instance.reference_no or '',
+            'otherReferences': instance.other_references or '',
+            'buyerOrderNo': instance.buyer_order_no or '',
+            'buyerOrderDate': instance.buyer_order_date.isoformat() if instance.buyer_order_date else None,
+            'dispatchDocNo': instance.dispatch_doc_no or '',
+            'deliveryNoteDate': instance.delivery_note_date.isoformat() if instance.delivery_note_date else None,
+            'dispatchedThrough': instance.dispatched_through or '',
+            'destination': instance.destination or '',
+            'termsOfDelivery': instance.terms_of_delivery or '',
             'createdAt': instance.created_at.isoformat() if instance.created_at else None,
+            'updatedAt': instance.updated_at.isoformat() if instance.updated_at else None,
         }
 
 

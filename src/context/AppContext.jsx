@@ -146,6 +146,14 @@ export function AppProvider({ children }) {
     refreshAll().catch(() => {});
   }, [isAuthenticated, authLoading, refreshAll, clearLocal]);
 
+  useEffect(() => {
+    const onCompanyChange = () => {
+      if (isAuthenticated) refreshAll().catch(() => {});
+    };
+    window.addEventListener('dlms-company-changed', onCompanyChange);
+    return () => window.removeEventListener('dlms-company-changed', onCompanyChange);
+  }, [isAuthenticated, refreshAll]);
+
   const refreshCustomers = useCallback(async () => {
     const custs = await customersApi.listCustomers();
     setCustomers(custs);
@@ -174,10 +182,14 @@ export function AppProvider({ children }) {
   }, []);
 
   const logActivity = useCallback((message, type = 'info') => {
-    setActivityLog((prev) => [
-      { id: `local_${Date.now()}`, type, message, at: new Date().toISOString() },
-      ...prev,
-    ].slice(0, 100));
+    const local = { id: `local_${Date.now()}`, type, message, at: new Date().toISOString() };
+    setActivityLog((prev) => [local, ...prev].slice(0, 100));
+    notificationsApi.createActivity({ message, type })
+      .then((row) => {
+        if (!row) return;
+        setActivityLog((prev) => [row, ...prev.filter((x) => x.id !== local.id)].slice(0, 100));
+      })
+      .catch(() => { /* keep optimistic local entry */ });
   }, []);
 
   const persistActivity = useCallback(async (message, type = 'info') => {
@@ -207,9 +219,10 @@ export function AppProvider({ children }) {
 
   const deleteCustomer = useCallback(async (id) => {
     const c = customers.find((x) => sameId(x.id, id));
-    await customersApi.deleteCustomer(id);
+    const res = await customersApi.deleteCustomer(id);
     setCustomers((prev) => prev.filter((x) => !sameId(x.id, id)));
     if (c) logActivity(`Customer deleted: ${c.name}`, 'customer');
+    return res;
   }, [customers, logActivity]);
 
   const getCustomer = useCallback(
@@ -226,10 +239,11 @@ export function AppProvider({ children }) {
   }, [refreshCustomers, refreshDashboard, logActivity]);
 
   const deleteTransaction = useCallback(async (id) => {
-    await transactionsApi.deleteTransaction(id);
+    const res = await transactionsApi.deleteTransaction(id);
     setTransactions((prev) => prev.filter((t) => !sameId(t.id, id)));
     await Promise.all([refreshCustomers(), refreshDashboard()]);
     logActivity('Transaction deleted', 'transaction');
+    return res;
   }, [refreshCustomers, refreshDashboard, logActivity]);
 
   const getCustomerTransactions = useCallback(
@@ -288,10 +302,11 @@ export function AppProvider({ children }) {
   }, []);
 
   const deleteInvoice = useCallback(async (id) => {
-    await invoicesApi.deleteInvoice(id);
+    const res = await invoicesApi.deleteInvoice(id);
     setInvoices((prev) => prev.filter((i) => !sameId(i.id, id)));
     await Promise.all([refreshCustomers(), refreshTransactions(), refreshDashboard()]);
     logActivity('Invoice deleted', 'invoice');
+    return res;
   }, [refreshCustomers, refreshTransactions, refreshDashboard, logActivity]);
 
   const duplicateInvoice = useCallback(async (id) => {

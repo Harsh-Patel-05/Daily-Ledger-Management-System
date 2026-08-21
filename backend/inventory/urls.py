@@ -8,6 +8,8 @@ from .views import (
     StockMovementViewSet,
     inventory_stats,
     products_bulk_import,
+    barcode_lookup,
+    godown_stock_list,
 )
 
 router = DefaultRouter()
@@ -19,5 +21,7 @@ router.register('movements', StockMovementViewSet, basename='inventory-movement'
 urlpatterns = [
     path('stats/', inventory_stats, name='inventory-stats'),
     path('products/import/', products_bulk_import, name='inventory-products-import'),
+    path('barcode/', barcode_lookup, name='inventory-barcode-lookup'),
+    path('godown-stock/', godown_stock_list, name='inventory-godown-stock'),
     path('', include(router.urls)),
 ]

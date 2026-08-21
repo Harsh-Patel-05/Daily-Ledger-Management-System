@@ -29,6 +29,13 @@ class PurchaseBill(models.Model):
         on_delete=models.CASCADE,
         related_name='purchase_bills',
     )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='purchase_bills',
+    )
     bill_no = models.CharField(max_length=50)
     date = models.DateField(default=timezone.localdate)
     supplier = models.ForeignKey(
@@ -41,6 +48,11 @@ class PurchaseBill(models.Model):
     supplier_name = models.CharField(max_length=200, blank=True)
     taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     gst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    sgst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    igst_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    place_of_supply = models.CharField(max_length=80, blank=True)
+    is_interstate = models.BooleanField(default=False)
     total = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -79,15 +91,25 @@ class PurchaseBill(models.Model):
         paid = Decimal(str(self.paid or 0))
         if self.gst_type == self.GstType.GST:
             self.total = taxable + gst
+            if self.is_interstate:
+                self.igst_amount = gst
+                self.cgst_amount = self.sgst_amount = Decimal('0')
+            else:
+                half = (gst / Decimal('2')).quantize(Decimal('0.01'))
+                self.cgst_amount = half
+                self.sgst_amount = gst - half
+                self.igst_amount = Decimal('0')
         else:
             self.total = taxable
             self.gst_amount = Decimal('0')
+            self.cgst_amount = self.sgst_amount = self.igst_amount = Decimal('0')
         self.balance = max(Decimal('0'), self.total - paid)
         self.status = compute_bill_status(self.balance, paid)
         if save:
             self.save(
                 update_fields=[
-                    'total', 'gst_amount', 'balance', 'status', 'paid', 'updated_at',
+                    'total', 'gst_amount', 'cgst_amount', 'sgst_amount', 'igst_amount',
+                    'balance', 'status', 'paid', 'updated_at',
                 ]
             )
 
@@ -96,6 +118,13 @@ class PurchasePayment(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        related_name='purchase_payments',
+    )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='purchase_payments',
     )
     bill = models.ForeignKey(
@@ -128,6 +157,13 @@ class PurchaseReturn(models.Model):
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
+        related_name='purchase_returns',
+    )
+    company = models.ForeignKey(
+        'companies.Company',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name='purchase_returns',
     )
     bill = models.ForeignKey(

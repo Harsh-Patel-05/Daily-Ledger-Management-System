@@ -10,6 +10,7 @@ import { useModal } from '../context/ModalContext';
 import { useToast } from '../context/ToastContext';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { Breadcrumbs, Card, Button, Badge, EmptyState, Filter } from '../components/ui';
+import { getApiMessage, getApiErrorMessage } from '../utils/apiMessage';
 
 const typeConfig = {
   payment_reminder: { icon: FaBell, color: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30', label: 'Reminder' },
@@ -41,7 +42,7 @@ export default function Notifications() {
       await syncAndRefreshNotifications();
       toast.info('In-app list updated. WhatsApp / SMS / Email ke liye “Send to customer” use karo.');
     } catch (err) {
-      toast.error(err.message || 'Refresh failed');
+      toast.error(getApiErrorMessage(err, 'Refresh failed'));
     } finally {
       setRefreshing(false);
     }

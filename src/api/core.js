@@ -13,6 +13,21 @@ export function getLedger(customerId, params = {}) {
   return api.get(`/ledger/${qs ? `?${qs}` : ''}`);
 }
 
+export function getCashBook(date) {
+  const q = date ? `?date=${encodeURIComponent(date)}` : '';
+  return api.get(`/cash-book/${q}`);
+}
+
+export function getDayBook(date) {
+  const q = date ? `?date=${encodeURIComponent(date)}` : '';
+  return api.get(`/day-book/${q}`);
+}
+
+export function getClosingBalance(date) {
+  const q = date ? `?date=${encodeURIComponent(date)}` : '';
+  return api.get(`/closing-balance/${q}`);
+}
+
 export function getReports(params = {}) {
   const q = new URLSearchParams(params);
   const qs = q.toString();

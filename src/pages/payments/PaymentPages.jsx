@@ -135,7 +135,7 @@ export function PaymentOut() {
     <div className="space-y-4">
       <PageHeader
         title="Payment Out"
-        subtitle="Supplier payments + expenses"
+        subtitle="Vendor payments + expenses"
         breadcrumbs={[{ label: 'Payments', to: '/payments/history' }, { label: 'Payment Out' }]}
         actions={(
           <>
@@ -148,7 +148,7 @@ export function PaymentOut() {
       <Card>
         <div className="mb-4"><SearchBox value={search} onChange={setSearch} placeholder="Search..." /></div>
         {list.length === 0 ? (
-          <EmptyState title="No payment out yet" description="Pay suppliers or add expenses." />
+          <EmptyState title="No payment out yet" description="Pay vendors or add expenses." />
         ) : (
           <>
             <Table columns={columns} data={data} />

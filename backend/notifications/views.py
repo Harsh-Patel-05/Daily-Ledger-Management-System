@@ -1,7 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.views import APIView
 from django_filters import rest_framework as filters
 
 from accounts.ownership import data_owner
@@ -151,20 +150,109 @@ class NotificationViewSet(viewsets.ModelViewSet):
             },
         }, status=status.HTTP_201_CREATED)
 
-
-class ActivityLogListView(APIView):
-    def get(self, request):
-        qs = ActivityLog.objects.filter(owner=data_owner(request.user))[:50]
-        return Response(ActivityLogSerializer(qs, many=True).data)
-
-    def post(self, request):
-        message = (request.data.get('message') or '').strip()
-        log_type = (request.data.get('type') or 'info').strip()[:50]
-        if not message:
-            return Response({'detail': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
-        row = ActivityLog.objects.create(
-            owner=data_owner(request.user),
-            type=log_type or 'info',
-            message=message[:255],
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Notification created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
         )
-        return Response(ActivityLogSerializer(row).data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Notification updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Notification deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class ActivityLogViewSet(viewsets.ModelViewSet):
+    """Activity feed — ModelSerializer + ModelViewSet."""
+
+    serializer_class = ActivityLogSerializer
+    http_method_names = ['get', 'post', 'head', 'options']
+    pagination_class = None
+
+    def get_queryset(self):
+        return ActivityLog.objects.filter(
+            owner=data_owner(self.request.user)
+        ).order_by('-created_at')
+
+    def list(self, request, *args, **kwargs):
+        qs = self.filter_queryset(self.get_queryset())[:50]
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=data_owner(self.request.user))
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                'success': True,
+                'message': 'Activity created successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_201_CREATED,
+            headers=headers,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        return Response(
+            {
+                'success': True,
+                'message': 'Activity updated successfully',
+                'data': serializer.data,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(
+            {
+                'success': True,
+                'message': 'Activity deleted successfully',
+            },
+            status=status.HTTP_200_OK,
+        )

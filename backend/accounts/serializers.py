@@ -82,6 +82,9 @@ class RegisterSerializer(serializers.Serializer):
             user=user,
             business_name=shop,
         )
+        from companies.services import ensure_primary_company
+
+        ensure_primary_company(user)
         return user
 
 

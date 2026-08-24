@@ -23,7 +23,7 @@ const TABS = [
 ];
 
 export default function CompanyList() {
-  const { companies, switchCompany, removeCompany, activeCompanyId } = useCompanies();
+  const { companies, loading, switchCompany, removeCompany, activeCompanyId } = useCompanies();
   const toast = useToast();
   const navigate = useNavigate();
 
@@ -222,7 +222,9 @@ export default function CompanyList() {
           />
         </div>
 
-        {filtered.length === 0 ? (
+        {loading ? (
+          <p className="py-12 text-center text-sm text-muted">Loading companies…</p>
+        ) : filtered.length === 0 ? (
           <EmptyState
             type="companies"
             title="No companies found"

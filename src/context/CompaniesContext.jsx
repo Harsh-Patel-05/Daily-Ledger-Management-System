@@ -9,11 +9,13 @@ import {
 } from '../api/companies';
 import { setActiveCompanyId as persistActiveCompanyId } from '../api/client';
 import { isCompanyGstEnabled } from '../utils/companyGst';
+import { useAuth } from './AuthContext';
 
 const CompaniesContext = createContext(null);
 const ACTIVE_YEAR_KEY = 'dlms_active_fy';
 
 export function CompaniesProvider({ children }) {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [companies, setCompanies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeCompanyId, setActiveCompanyIdState] = useState(() => {
@@ -38,6 +40,11 @@ export function CompaniesProvider({ children }) {
   });
 
   const reload = useCallback(async () => {
+    if (!isAuthenticated) {
+      setCompanies([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const rows = await listCompanies();
@@ -62,11 +69,17 @@ export function CompaniesProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) {
+      setCompanies([]);
+      setLoading(false);
+      return;
+    }
     reload();
-  }, [reload]);
+  }, [isAuthenticated, authLoading, reload]);
 
   const setActiveCompany = useCallback((id) => {
     setActiveCompanyIdState(id);

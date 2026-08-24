@@ -10,10 +10,27 @@ python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 copy .env.example .env
+# Edit .env — set DB_PASSWORD to your PostgreSQL password
+# Create DB once:  createdb -U postgres daily_ledger
+# (or in psql: CREATE DATABASE daily_ledger;)
 python manage.py migrate
 python manage.py seed_demo
 python manage.py runserver 8001
 ```
+
+### Database (PostgreSQL)
+
+Requires a local PostgreSQL server. Defaults in `.env`:
+
+| Variable | Default |
+|----------|---------|
+| `DB_NAME` | `daily_ledger` |
+| `DB_USER` | `postgres` |
+| `DB_PASSWORD` | `postgres` |
+| `DB_HOST` | `127.0.0.1` |
+| `DB_PORT` | `5432` |
+
+Or set `DATABASE_URL=postgres://user:pass@host:5432/daily_ledger` (overrides `DB_*`).
 
 > If port 8000 is already in use, keep using `8001`.
 

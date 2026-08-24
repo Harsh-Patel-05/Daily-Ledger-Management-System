@@ -75,15 +75,38 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-        'OPTIONS': {
-            'timeout': 20,
-        },
+# PostgreSQL — local: DB_* in .env | Render: auto DATABASE_URL from linked Postgres
+_database_url = config('DATABASE_URL', default='').strip()
+if _database_url:
+    import urllib.parse as _urlparse
+
+    _u = _urlparse.urlparse(_database_url)
+    _db_name = (_u.path or '/').lstrip('/') or 'daily_ledger'
+    # Render sometimes uses postgres:// — Django needs postgresql
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': _db_name,
+            'USER': _urlparse.unquote(_u.username or ''),
+            'PASSWORD': _urlparse.unquote(_u.password or ''),
+            'HOST': _u.hostname or '127.0.0.1',
+            'PORT': str(_u.port or 5432),
+        }
     }
-}
+    # Managed Postgres (Render) requires SSL
+    if (_u.hostname or '') not in ('127.0.0.1', 'localhost', ''):
+        DATABASES['default']['OPTIONS'] = {'sslmode': 'require'}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': config('DB_ENGINE', default='django.db.backends.postgresql'),
+            'NAME': config('DB_NAME', default='daily_ledger'),
+            'USER': config('DB_USER', default='postgres'),
+            'PASSWORD': config('DB_PASSWORD', default='postgres'),
+            'HOST': config('DB_HOST', default='127.0.0.1'),
+            'PORT': config('DB_PORT', default='5432'),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},

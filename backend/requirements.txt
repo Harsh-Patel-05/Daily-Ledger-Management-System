@@ -9,3 +9,4 @@ drf-spectacular==0.30.0
 gunicorn==23.0.0
 whitenoise==6.9.0
 pre-commit==4.6.2
+psycopg[binary]==3.3.2

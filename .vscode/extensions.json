@@ -1,3 +1,7 @@
 {
-  "recommendations": ["ms-python.python", "ms-python.vscode-pylance"]
+    "recommendations": [
+        "myml.vscode-markdown-plantuml-preview",
+        "esbenp.prettier-vscode",
+        "jebbs.plantuml"
+    ]
 }

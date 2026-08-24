@@ -1,6 +1,6 @@
 /** Support / desktop links — override via Vite env. */
 
-const DEFAULT_WHATSAPP = '919898665536';
+const DEFAULT_WHATSAPP = '919687401551';
 const DEFAULT_EMAIL = 'support@dailyledger.app';
 
 export function getSupportWhatsApp() {
